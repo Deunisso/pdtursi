@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Industrial LX02 - WMS Otimizado</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(100%); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .toast-animate { animation: slideIn 0.3s ease-out forwards; }
+    
+    /* Melhora visual da janela do leitor */
+    #reader video {
+      object-fit: cover !important;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white p-4 font-sans min-h-screen relative">
+
+  <div id="containerToasts" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-xs w-full pointer-events-none"></div>
+
+  <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    
+    <div class="md:col-span-1 lg:col-span-1 space-y-4">
+      <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-xl space-y-3">
+        <div class="flex justify-between items-center">
+          <h1 class="text-base font-bold text-blue-400 tracking-tight flex items-center gap-1.5">
+            <span>📡 Captura Pro Ultra</span>
+          </h1>
+          <span id="badgeModo" class="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold animate-pulse">ZXING ACTIVE</span>
+        </div>
+        
+        <div class="relative overflow-hidden rounded-lg border-2 border-gray-600 bg-black aspect-square w-full shadow-inner" id="reader">
+          <div class="absolute inset-x-4 top-[40%] bottom-[40%] border-2 border-dashed border-yellow-400/50 z-50 pointer-events-none rounded"></div>
+          <div class="absolute inset-x-0 top-1/2 h-[3px] bg-red-600 z-50 pointer-events-none shadow-[0_0_12px_rgba(220,38,38,1)] animate-pulse"></div>
+        </div>
+
+        <div class="pt-2 border-t border-gray-700">
+          <label class="text-[11px] font-semibold text-gray-300 block mb-1 flex justify-between">
+            <span>⌨️ Digitação Crítica / Backup:</span>
+            <span class="text-[10px] text-yellow-500 font-bold">(4 dígitos livres)</span>
+          </label>
+          <div class="flex gap-2">
+            <input type="text" inputmode="numeric" id="inputManual" placeholder="Ex: 3610" 
+              class="bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white w-full font-mono focus:outline-none focus:border-blue-400 shadow-inner">
+            <button onclick="enviarManual()" class="bg-blue-600 hover:bg-blue-500 font-bold px-4 py-2 rounded-lg text-xs transition shadow active:scale-95">OK</button>
+          </div>
+        </div>
+
+        <div id="statusPainel" class="p-2.5 bg-gray-900 rounded-lg text-center text-xs font-semibold text-gray-400">
+          Calibrando foco automático...
+        </div>
+      </div>
+    </div>
+
+    <div class="md:col-span-1 lg:col-span-1 space-y-4">
+      <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl flex flex-col h-[calc(100vh-2rem)] min-h-[500px]">
+        <div class="border-b border-gray-700 pb-3 mb-3">
+          <h2 class="text-base font-bold text-yellow-400 flex items-center gap-2">📍 Bins Recomendados</h2>
+          <p class="text-xs text-gray-400">Posições pendentes no inventário</p>
+        </div>
+        <div id="listaBins" class="flex-1 overflow-y-auto space-y-2 pr-1 text-sm">
+          <div class="text-center py-8 text-gray-600 text-xs">Aguardando banco de dados...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="md:col-span-1 lg:col-span-2 space-y-4">
+      <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-xl flex flex-col h-[calc(100vh-2rem)] min-h-[500px]">
+        <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-xl font-bold">Progresso LX02</h2>
+              <span id="badgeConexao" class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse">🔄 CONECTANDO...</span>
+            </div>
+            <p class="text-xs text-gray-400">Sincronizado em tempo real</p>
+          </div>
+          <span id="txtProgresso" class="text-sm font-mono bg-blue-900 text-blue-300 px-3 py-1 rounded-full font-bold">0/0 Itens</span>
+        </div>
+        <div id="listaDashboard" class="flex-1 overflow-y-auto space-y-2 pr-1 text-sm">
+          <div class="text-center py-8 text-gray-500 flex flex-col items-center justify-center gap-2">
+            <span class="animate-spin text-xl text-blue-400">⏳</span>Consultando banco de dados...
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const URL_APPLICACAO = "https://script.google.com/macros/s/AKfycbybCcaDgjqzefPpUuo3cCP3PWnTQrknXt4DNtdKsZ5_dE6pFkLCTRlB3PWgGoQlfCZnKA/exec"; 
+
+    const statusPainel = document.getElementById('statusPainel');
+    const listaDashboard = document.getElementById('listaDashboard');
+    const listaBins = document.getElementById('listaBins');
+    const txtProgresso = document.getElementById('txtProgresso');
+    const badgeConexao = document.getElementById('badgeConexao');
+    const inputManual = document.getElementById('inputManual');
+    const containerToasts = document.getElementById('containerToasts');
+    
+    let processandoBipe = false;
+    let ultimaHULida = "";
+    let tempoUltimoBipe = 0;
+    let estaBuscando = false; 
+    let primeiraCarga = true;
+    
+    let bancoDadosLocalHUs = []; 
+    let memoriaStatusHUs = {}; 
+
+    function mostrarToast(titulo, mensagem, tipo = 'sucesso') {
+      const id = 'toast-' + Date.now();
+      const corBorda = tipo === 'sucesso' ? 'border-emerald-500 bg-emerald-950/90 text-emerald-200' : 'border-blue-500 bg-blue-950/90 text-blue-200';
+      const icone = tipo === 'sucesso' ? '🎉' : '🔔';
+
+      const toastHTML = `
+        <div id="${id}" class="pointer-events-auto p-3 rounded-lg border ${corBorda} shadow-2xl backdrop-blur-md flex items-start gap-3 toast-animate transition-all duration-300">
+          <span class="text-lg">${icone}</span>
+          <div class="flex-1 text-xs">
+            <p class="font-bold text-white">${titulo}</p>
+            <p class="text-[11px] opacity-90 font-mono mt-0.5">${mensagem}</p>
+          </div>
+        </div>
+      `;
+      containerToasts.insertAdjacentHTML('afterbegin', toastHTML);
+      const el = document.getElementById(id);
+      setTimeout(() => {
+        if (el) {
+          el.style.opacity = '0';
+          el.style.transform = 'translateX(100%)';
+          setTimeout(() => el.remove(), 300);
+        }
+      }, 4500);
+    }
+
+    function atualizarDashboard() {
+      if (estaBuscando) return; 
+      estaBuscando = true;
+      fetch(URL_APPLICACAO)
+        .then(res => res.json())
+        .then(itens => {
+          estaBuscando = false;
+          badgeConexao.className = "text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+          badgeConexao.textContent = "● ONLINE";
+
+          bancoDadosLocalHUs = itens || [];
+
+          let htmlHUs = "";
+          let conferidos = 0;
+          let statusDosBins = {};
+          let novosItensConferidos = [];
+          
+          if(!itens || itens.length === 0) return;
+
+          itens.forEach(item => {
+            const eraConferidoAntes = memoriaStatusHUs[item.hu] || false;
+            if (!eraConferidoAntes && item.conferido && !primeiraCarga) {
+              novosItensConferidos.push(item);
+            }
+            memoriaStatusHUs[item.hu] = item.conferido;
+
+            if (item.conferido) conferidos++;
+            const nomeBin = item.bin ? String(item.bin).trim() : "N/A";
+            if (!statusDosBins[nomeBin]) statusDosBins[nomeBin] = { total: 0, conferidos: 0 };
+            statusDosBins[nomeBin].total++;
+            if (item.conferido) statusDosBins[nomeBin].conferidos++;
+
+            const cardCor = item.conferido ? "bg-emerald-950/70 border-emerald-500" : "bg-gray-900/50 border-gray-700";
+            const badge = item.conferido ? "<span class='bg-emerald-500 text-black text-[10px] px-2 py-0.5 rounded font-bold'>✓ OK</span>" : "<span class='bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded border border-amber-500/30'>PENDENTE</span>";
+
+            htmlHUs += `
+              <div class="p-3 rounded-lg border ${cardCor} flex justify-between items-center transition-all">
+                <div>
+                  <p class="text-xs font-mono font-bold text-gray-400">HU: ${item.hu}</p>
+                  <p class="font-bold text-white text-xs">${item.material} - ${item.descricao}</p>
+                  <p class="text-[11px] text-yellow-400">Bin: ${item.bin}</p>
+                  <p class="text-[11px] text-cyan-400 font-medium">Qtd: ${item.quantidade || '0'}</p>
+                </div>
+                <div>${badge}</div>
+              </div>`;
+          });
+          
+          listaDashboard.innerHTML = htmlHUs;
+          txtProgresso.textContent = `${conferidos}/${itens.length} Itens`;
+
+          if (novosItensConferidos.length > 0) {
+            novosItensConferidos.forEach(novo => {
+              mostrarToast("Item Conferido!", `HU final ...${String(novo.hu).slice(-4)} no Bin ${novo.bin}`, 'sucesso');
+            });
+          }
+
+          primeiraCarga = false;
+
+          let htmlBins = "";
+          Object.keys(statusDosBins).sort().forEach(nomeBin => {
+            const info = statusDosBins[nomeBin];
+            if (info.conferidos === info.total) return;
+            const indicador = `<span class='bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] px-2 py-0.5 rounded font-mono font-bold'>${info.total - info.conferidos} HU PEND</span>`;
+            htmlBins += `
+              <div class="p-3 rounded-lg border bg-gray-900/40 border-gray-700 flex justify-between items-center transition-all">
+                <div class="font-mono">
+                  <p class="text-sm tracking-wide text-amber-400 font-bold">${nomeBin}</p>
+                  <p class="text-[10px] text-gray-500">Progresso: ${info.conferidos}/${info.total} HUs</p>
+                </div>
+                <div>${indicador}</div>
+              </div>`;
+          });
+          if (htmlBins === "") htmlBins = `<div class="text-center py-8 text-emerald-400 font-semibold text-xs border border-dashed border-emerald-800 rounded-lg bg-emerald-950/20 px-2">🎉 Todos os Bins conferidos!</div>`;
+          listaBins.innerHTML = htmlBins;
+        }).catch(() => { estaBuscando = false; });
+    }
+
+    // ==========================================
+    // PROCESSADOR CENTRAL AJUSTADO CONTRA FALHAS
+    // ==========================================
+    function processarCaptura(textoCru, fonte = "CÂMERA") {
+      const agora = Date.now();
+      let codigoParaEnviar = String(textoCru).replace(/\D/g, "").trim();
+      
+      if (!codigoParaEnviar) return;
+
+      if (fonte === "MANUAL") {
+        if (codigoParaEnviar.length < 4) {
+          statusPainel.innerHTML = `<span class='text-amber-400 font-bold'>⚠️ Digite no mínimo 4 números!</span>`;
+          return;
+        }
+
+        // Algoritmo de varredura robusta por string em qualquer parte terminal da HU
+        const huCorrespondente = bancoDadosLocalHUs.find(item => {
+          const huTexto = String(item.hu).trim();
+          return huTexto.endsWith(codigoParaEnviar) || huTexto.includes(codigoParaEnviar);
+        });
+
+        if (huCorrespondente) {
+          codigoParaEnviar = huCorrespondente.hu; 
+        } else {
+          statusPainel.innerHTML = `<span class='text-red-400 font-bold'>✗ Final ...${codigoParaEnviar} não encontrado na lista local.</span>`;
+          if (navigator.vibrate) navigator.vibrate([300]);
+          return;
+        }
+      } else {
+        // Câmera exige o código cheio para evitar falsos bipes com ruídos
+        if (codigoParaEnviar.length < 8) return;
+      }
+
+      if (codigoParaEnviar === ultimaHULida && (agora - tempoUltimoBipe) < 2500 && fonte !== "MANUAL") return;
+      if (processandoBipe) return;
+
+      processandoBipe = true;
+      ultimaHULida = codigoParaEnviar;
+      tempoUltimoBipe = agora;
+
+      statusPainel.innerHTML = `<span class='text-yellow-400 animate-pulse font-bold'>⚡ [${fonte}] Enviando: ${codigoParaEnviar}...</span>`;
+      
+      fetch(URL_APPLICACAO, {
+        method: "POST",
+        redirect: "follow",
+        body: JSON.stringify({ hu: codigoParaEnviar })
+      })
+      .then(res => res.json())
+      .then(res => {
+        processandoBipe = false;
+        if (res.encontrado) {
+          inputManual.value = ""; 
+          statusPainel.innerHTML = `<span class='text-emerald-400 font-bold'>✓ [${fonte}] OK: HU ${res.hu}</span>`;
+          if (navigator.vibrate) navigator.vibrate([100, 50, 100]); 
+          atualizarDashboard(); 
+        } else {
+          statusPainel.innerHTML = `<div class='text-red-400 text-xs font-bold'>✗ CONFLITO NA PLANILHA<br><span class='text-[10px] text-gray-400 font-mono'>HU: ${codigoParaEnviar}</span></div>`;
+          if (navigator.vibrate) navigator.vibrate([400]); 
+        }
+      })
+      .catch(() => { processandoBipe = false; });
+    }
+
+    function enviarManual() {
+      const val = inputManual.value.trim();
+      processarCaptura(val, "MANUAL");
+    }
+
+    inputManual.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        enviarManual();
+      }
+    });
+
+    // ==========================================
+    // INICIALIZAÇÃO DA CÂMERA DE ALTA DEFINIÇÃO
+    // ==========================================
+    function iniciarBarcodeScanner() {
+      const scannerBarcode = new Html5Qrcode("reader", { 
+        formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ],
+        verbose: false 
+      });
+      
+      const config = { 
+        fps: 30, // Captura de frames veloz para mitigar o tremor das mãos
+        qrbox: (width, height) => { 
+          // Otimização matemática: Janela horizontal focada que cobre 95% da largura e apenas 25% de altura
+          const larguraFixa = width * 0.95;
+          const alturaFixa = height * 0.25;
+          return { width: larguraFixa, height: alturaFixa } 
+        },
+        videoConstraints: { 
+          facingMode: "environment", 
+          focusMode: "continuous",
+          // Força o sensor a puxar a melhor resolução para desembaçar linhas finas do GS1-128
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      };
+
+      scannerBarcode.start({ facingMode: "environment" }, config, (decodedText) => {
+        processarCaptura(decodedText, "BARCODE");
+      })
+      .then(() => { statusPainel.innerHTML = "<span class='text-emerald-400 font-semibold'>📷 Scanner Otimizado Pronto.</span>"; })
+      .catch(() => { statusPainel.innerHTML = "<span class='text-amber-400 block font-bold text-xs'>Permita acesso à câmera e recarregue.</span>"; });
+    }
+
+    window.addEventListener('load', () => {
+      atualizarDashboard();
+      iniciarBarcodeScanner();
+      setInterval(atualizarDashboard, 2000);
+    });
+  </script>
+</body>
+</html>
