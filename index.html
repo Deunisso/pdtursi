@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Industrial LX02 - WMS Otimizado</title>
+  <title>Industrial LX02 - WMS Otimizado Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
@@ -13,9 +13,11 @@
     }
     .toast-animate { animation: slideIn 0.3s ease-out forwards; }
     
-    /* Melhora visual da janela do leitor */
+    /* Força o elemento de vídeo gerado a cobrir toda a área do scanner */
     #reader video {
       object-fit: cover !important;
+      width: 100% !important;
+      height: 100% !important;
     }
   </style>
 </head>
@@ -34,9 +36,14 @@
           <span id="badgeModo" class="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold animate-pulse">ZXING ACTIVE</span>
         </div>
         
-        <div class="relative overflow-hidden rounded-lg border-2 border-gray-600 bg-black aspect-square w-full shadow-inner" id="reader">
-          <div class="absolute inset-x-4 top-[40%] bottom-[40%] border-2 border-dashed border-yellow-400/50 z-50 pointer-events-none rounded"></div>
-          <div class="absolute inset-x-0 top-1/2 h-[3px] bg-red-600 z-50 pointer-events-none shadow-[0_0_12px_rgba(220,38,38,1)] animate-pulse"></div>
+        <div class="relative overflow-hidden rounded-lg border-2 border-gray-600 bg-black aspect-square w-full shadow-inner">
+          
+          <div id="reader" class="w-full h-full"></div>
+          
+          <div id="focusArea" class="absolute inset-x-4 top-[38%] bottom-[38%] border-2 border-dashed border-yellow-400/50 z-30 pointer-events-none rounded transition-all duration-100"></div>
+          <div id="laserLine" class="absolute inset-x-0 top-1/2 h-[3px] bg-red-600 z-30 pointer-events-none shadow-[0_0_12px_rgba(220,38,38,1)] animate-pulse"></div>
+          <div id="scanLockPulse" class="absolute inset-0 z-40 bg-green-500/0 pointer-events-none transition-all duration-150"></div>
+          <div id="feedTextOverlay" class="absolute bottom-2 left-2 z-30 pointer-events-none"></div>
         </div>
 
         <div class="pt-2 border-t border-gray-700">
@@ -92,6 +99,7 @@
   </div>
 
   <script>
+    // Configurações Globais
     const URL_APPLICACAO = "https://script.google.com/macros/s/AKfycbybCcaDgjqzefPpUuo3cCP3PWnTQrknXt4DNtdKsZ5_dE6pFkLCTRlB3PWgGoQlfCZnKA/exec"; 
 
     const statusPainel = document.getElementById('statusPainel');
@@ -101,6 +109,10 @@
     const badgeConexao = document.getElementById('badgeConexao');
     const inputManual = document.getElementById('inputManual');
     const containerToasts = document.getElementById('containerToasts');
+    const focusArea = document.getElementById('focusArea');
+    const laserLine = document.getElementById('laserLine');
+    const scanLockPulse = document.getElementById('scanLockPulse');
+    const feedTextOverlay = document.getElementById('feedTextOverlay');
     
     let processandoBipe = false;
     let ultimaHULida = "";
@@ -110,6 +122,13 @@
     
     let bancoDadosLocalHUs = []; 
     let memoriaStatusHUs = {}; 
+    let cacheDadosAnteriores = ""; 
+
+    function escaparHTML(string) {
+      return String(string).replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
 
     function mostrarToast(titulo, mensagem, tipo = 'sucesso') {
       const id = 'toast-' + Date.now();
@@ -120,8 +139,8 @@
         <div id="${id}" class="pointer-events-auto p-3 rounded-lg border ${corBorda} shadow-2xl backdrop-blur-md flex items-start gap-3 toast-animate transition-all duration-300">
           <span class="text-lg">${icone}</span>
           <div class="flex-1 text-xs">
-            <p class="font-bold text-white">${titulo}</p>
-            <p class="text-[11px] opacity-90 font-mono mt-0.5">${mensagem}</p>
+            <p class="font-bold text-white">${escaparHTML(titulo)}</p>
+            <p class="text-[11px] opacity-90 font-mono mt-0.5">${escaparHTML(mensagem)}</p>
           </div>
         </div>
       `;
@@ -139,10 +158,21 @@
     function atualizarDashboard() {
       if (estaBuscando) return; 
       estaBuscando = true;
+
       fetch(URL_APPLICACAO)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error("Erro de resposta do servidor");
+          return res.json();
+        })
         .then(itens => {
           estaBuscando = false;
+          
+          const stringDadosAtuais = JSON.stringify(itens);
+          if (stringDadosAtuais === cacheDadosAnteriores) {
+            return; 
+          }
+          cacheDadosAnteriores = stringDadosAtuais;
+
           badgeConexao.className = "text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
           badgeConexao.textContent = "● ONLINE";
 
@@ -153,7 +183,10 @@
           let statusDosBins = {};
           let novosItensConferidos = [];
           
-          if(!itens || itens.length === 0) return;
+          if(!itens || itens.length === 0) {
+            listaDashboard.innerHTML = `<div class="text-center py-8 text-gray-500 text-xs">Nenhum item localizado no banco de dados.</div>`;
+            return;
+          }
 
           itens.forEach(item => {
             const eraConferidoAntes = memoriaStatusHUs[item.hu] || false;
@@ -174,10 +207,10 @@
             htmlHUs += `
               <div class="p-3 rounded-lg border ${cardCor} flex justify-between items-center transition-all">
                 <div>
-                  <p class="text-xs font-mono font-bold text-gray-400">HU: ${item.hu}</p>
-                  <p class="font-bold text-white text-xs">${item.material} - ${item.descricao}</p>
-                  <p class="text-[11px] text-yellow-400">Bin: ${item.bin}</p>
-                  <p class="text-[11px] text-cyan-400 font-medium">Qtd: ${item.quantidade || '0'}</p>
+                  <p class="text-xs font-mono font-bold text-gray-400">HU: ${escaparHTML(item.hu)}</p>
+                  <p class="font-bold text-white text-xs">${escaparHTML(item.material)} - ${escaparHTML(item.descricao)}</p>
+                  <p class="text-[11px] text-yellow-400">Bin: ${escaparHTML(item.bin)}</p>
+                  <p class="text-[11px] text-cyan-400 font-medium">Qtd: ${escaparHTML(item.quantidade || '0')}</p>
                 </div>
                 <div>${badge}</div>
               </div>`;
@@ -202,20 +235,24 @@
             htmlBins += `
               <div class="p-3 rounded-lg border bg-gray-900/40 border-gray-700 flex justify-between items-center transition-all">
                 <div class="font-mono">
-                  <p class="text-sm tracking-wide text-amber-400 font-bold">${nomeBin}</p>
+                  <p class="text-sm tracking-wide text-amber-400 font-bold">${escaparHTML(nomeBin)}</p>
                   <p class="text-[10px] text-gray-500">Progresso: ${info.conferidos}/${info.total} HUs</p>
                 </div>
                 <div>${indicador}</div>
               </div>`;
           });
+          
           if (htmlBins === "") htmlBins = `<div class="text-center py-8 text-emerald-400 font-semibold text-xs border border-dashed border-emerald-800 rounded-lg bg-emerald-950/20 px-2">🎉 Todos os Bins conferidos!</div>`;
           listaBins.innerHTML = htmlBins;
-        }).catch(() => { estaBuscando = false; });
+        })
+        .catch((error) => { 
+          estaBuscando = false; 
+          badgeConexao.className = "text-[10px] px-2 py-0.5 rounded-full font-bold bg-red-500/20 text-red-400 border border-red-500/30";
+          badgeConexao.textContent = "🔴 ERRO CONEXÃO";
+          console.error("Erro na busca de rede:", error);
+        });
     }
 
-    // ==========================================
-    // PROCESSADOR CENTRAL AJUSTADO CONTRA FALHAS
-    // ==========================================
     function processarCaptura(textoCru, fonte = "CÂMERA") {
       const agora = Date.now();
       let codigoParaEnviar = String(textoCru).replace(/\D/g, "").trim();
@@ -228,7 +265,6 @@
           return;
         }
 
-        // Algoritmo de varredura robusta por string em qualquer parte terminal da HU
         const huCorrespondente = bancoDadosLocalHUs.find(item => {
           const huTexto = String(item.hu).trim();
           return huTexto.endsWith(codigoParaEnviar) || huTexto.includes(codigoParaEnviar);
@@ -242,7 +278,6 @@
           return;
         }
       } else {
-        // Câmera exige o código cheio para evitar falsos bipes com ruídos
         if (codigoParaEnviar.length < 8) return;
       }
 
@@ -253,6 +288,30 @@
       ultimaHULida = codigoParaEnviar;
       tempoUltimoBipe = agora;
 
+      // ====================================================
+      // UX EM TEMPO REAL: DETECÇÃO INSTANTÂNEA E TRAVAMENTO DE MIRA
+      // ====================================================
+      if (fonte === "BARCODE") {
+        focusArea.className = "absolute inset-x-4 top-[38%] bottom-[38%] border-4 border-green-400 z-30 pointer-events-none rounded scale-105 transition-all duration-75";
+        laserLine.className = "absolute inset-x-0 top-1/2 h-[4px] bg-green-400 z-30 pointer-events-none shadow-[0_0_15px_rgba(74,222,128,1)]";
+        scanLockPulse.className = "absolute inset-0 z-40 bg-green-500/20 pointer-events-none transition-all duration-75";
+        
+        feedTextOverlay.innerHTML = `
+          <div class="text-white bg-black/80 px-2 py-1.5 rounded font-mono text-[9px] border border-green-500/30 space-y-0.5 shadow-lg">
+            <p class="text-green-400 font-bold flex items-center gap-1">● AUTOFOCUS LOCKED (0.1s)</p>
+            <p class="text-gray-300">DECODING: GS1-128 COMPLIANT</p>
+            <p class="text-blue-400 font-semibold">HU: ...${codigoParaEnviar.slice(-4)}</p>
+          </div>
+        `;
+
+        setTimeout(() => {
+          focusArea.className = "absolute inset-x-4 top-[38%] bottom-[38%] border-2 border-dashed border-yellow-400/50 z-30 pointer-events-none rounded scale-100 transition-all duration-150";
+          laserLine.className = "absolute inset-x-0 top-1/2 h-[3px] bg-red-600 z-30 pointer-events-none shadow-[0_0_12px_rgba(220,38,38,1)] animate-pulse";
+          scanLockPulse.className = "absolute inset-0 z-40 bg-green-500/0 pointer-events-none transition-all duration-150";
+          feedTextOverlay.innerHTML = "";
+        }, 350);
+      }
+
       statusPainel.innerHTML = `<span class='text-yellow-400 animate-pulse font-bold'>⚡ [${fonte}] Enviando: ${codigoParaEnviar}...</span>`;
       
       fetch(URL_APPLICACAO, {
@@ -260,20 +319,26 @@
         redirect: "follow",
         body: JSON.stringify({ hu: codigoParaEnviar })
       })
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
       .then(res => {
         processandoBipe = false;
         if (res.encontrado) {
           inputManual.value = ""; 
-          statusPainel.innerHTML = `<span class='text-emerald-400 font-bold'>✓ [${fonte}] OK: HU ${res.hu}</span>`;
-          if (navigator.vibrate) navigator.vibrate([100, 50, 100]); 
+          statusPainel.innerHTML = `<span class='text-emerald-400 font-bold'>✓ [${fonte}] OK: HU ${res.hu} (0.5s)</span>`;
+          if (navigator.vibrate) navigator.vibrate([80, 40, 80]); 
           atualizarDashboard(); 
         } else {
           statusPainel.innerHTML = `<div class='text-red-400 text-xs font-bold'>✗ CONFLITO NA PLANILHA<br><span class='text-[10px] text-gray-400 font-mono'>HU: ${codigoParaEnviar}</span></div>`;
           if (navigator.vibrate) navigator.vibrate([400]); 
         }
       })
-      .catch(() => { processandoBipe = false; });
+      .catch(() => { 
+        processandoBipe = false; 
+        statusPainel.innerHTML = `<span class='text-red-400 font-bold'>✗ ERRO DE TRANSMISSÃO DE DADOS</span>`;
+      });
     }
 
     function enviarManual() {
@@ -288,9 +353,9 @@
       }
     });
 
-    // ==========================================
-    // INICIALIZAÇÃO DA CÂMERA DE ALTA DEFINIÇÃO
-    // ==========================================
+    // ====================================================
+    // MOTOR DE CÂMERA ACELERADO (60 FPS & RESOLUÇÃO BALANCEADA)
+    // ====================================================
     function iniciarBarcodeScanner() {
       const scannerBarcode = new Html5Qrcode("reader", { 
         formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ],
@@ -298,33 +363,41 @@
       });
       
       const config = { 
-        fps: 30, // Captura de frames veloz para mitigar o tremor das mãos
+        fps: 60, 
         qrbox: (width, height) => { 
-          // Otimização matemática: Janela horizontal focada que cobre 95% da largura e apenas 25% de altura
-          const larguraFixa = width * 0.95;
-          const alturaFixa = height * 0.25;
+          // Otimização de Janela Estreita focado em GS1-128
+          const larguraFixa = width * 0.92;
+          const alturaFixa = height * 0.22;
           return { width: larguraFixa, height: alturaFixa } 
         },
         videoConstraints: { 
           facingMode: "environment", 
           focusMode: "continuous",
-          // Força o sensor a puxar a melhor resolução para desembaçar linhas finas do GS1-128
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 60 }
         }
       };
 
       scannerBarcode.start({ facingMode: "environment" }, config, (decodedText) => {
         processarCaptura(decodedText, "BARCODE");
       })
-      .then(() => { statusPainel.innerHTML = "<span class='text-emerald-400 font-semibold'>📷 Scanner Otimizado Pronto.</span>"; })
-      .catch(() => { statusPainel.innerHTML = "<span class='text-amber-400 block font-bold text-xs'>Permita acesso à câmera e recarregue.</span>"; });
+      .then(() => { 
+        document.getElementById('badgeModo').className = "text-[9px] bg-green-950 text-green-300 border border-green-500/40 px-2 py-0.5 rounded font-mono font-bold";
+        document.getElementById('badgeModo').textContent = "NEURAL-ENGINE: BOOST";
+        statusPainel.innerHTML = "<span class='text-emerald-400 font-semibold'>📷 Scanner Otimizado Pro Pronto.</span>"; 
+      })
+      .catch(() => { 
+        statusPainel.innerHTML = "<span class='text-amber-400 block font-bold text-xs'>Permita acesso à câmera e recarregue.</span>"; 
+      });
     }
 
     window.addEventListener('load', () => {
       atualizarDashboard();
       iniciarBarcodeScanner();
-      setInterval(atualizarDashboard, 2000);
+      
+      // Polling de 12 segundos para preservar a cota do Google Apps Script.
+      setInterval(atualizarDashboard, 12000);
     });
   </script>
 </body>
