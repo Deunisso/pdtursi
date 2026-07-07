@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor GS1-128 HU (SSCC-18)</title>
+    <title>Leitor GS1-128 HU via Câmera</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
     <style>
         :root {
             --primary: #2563eb;
-            --background: #f8fafc;
+            --background: #f1f5f9;
             --card-bg: #ffffff;
             --text: #1e293b;
             --success: #16a34a;
@@ -15,83 +17,70 @@
         }
 
         body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
             background-color: var(--background);
             color: var(--text);
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             min-height: 100vh;
+            box-sizing: border-box;
         }
 
         .container {
             background-color: var(--card-bg);
-            padding: 30px;
+            padding: 20px;
             border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
             width: 100%;
-            max-width: 550px;
+            max-width: 500px;
         }
 
         h2 {
             margin-top: 0;
             color: var(--primary);
             text-align: center;
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             border-bottom: 2px solid #e2e8f0;
             padding-bottom: 10px;
         }
 
-        .input-group {
-            margin-bottom: 20px;
-            position: relative;
+        /* Estilização do container da câmera */
+        #camera-container {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            margin-bottom: 15px;
         }
 
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            font-size: 0.9rem;
-        }
-
-        input[type="text"] {
+        .btn-reset {
+            display: none;
             width: 100%;
             padding: 12px;
-            border: 2px solid #cbd5e1;
+            background-color: var(--primary);
+            color: white;
+            border: none;
             border-radius: 6px;
-            font-size: 1.1rem;
-            box-sizing: border-box;
-            transition: border-color 0.2s;
-        }
-
-        input[type="text"]:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 15px;
         }
 
         .status {
             text-align: center;
             font-weight: bold;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             padding: 10px;
             border-radius: 6px;
-            display: none;
+            font-size: 0.9rem;
         }
-
-        .status.success {
-            display: block;
-            background-color: #dcfce7;
-            color: var(--success);
-        }
-
-        .status.error {
-            display: block;
-            background-color: #fee2e2;
-            color: var(--error);
-        }
+        .status.scanning { background-color: #e0f2fe; color: #0369a1; }
+        .status.success { background-color: #dcfce7; color: var(--success); }
+        .status.error { background-color: #fee2e2; color: var(--error); }
 
         .result-table {
             width: 100%;
@@ -101,15 +90,16 @@
         }
 
         .result-table th, .result-table td {
-            padding: 12px;
+            padding: 10px;
             text-align: left;
             border-bottom: 1px solid #e2e8f0;
+            font-size: 0.9rem;
         }
 
         .result-table th {
-            background-color: #f1f5f9;
+            background-color: #f8fafc;
             font-weight: 600;
-            width: 40%;
+            width: 45%;
         }
 
         .badge {
@@ -123,7 +113,7 @@
 
         .raw-code {
             font-family: monospace;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             letter-spacing: 1px;
             word-break: break-all;
         }
@@ -132,14 +122,15 @@
 <body>
 
 <div class="container">
-    <h2>Leitor GS1-128 / HU (SSCC-18)</h2>
+    <h2>Leitor GS1-128 / HU (Câmera)</h2>
     
-    <div class="input-group">
-        <label for="barcodeInput">Aguardando leitura do Scanner...</label>
-        <input type="text" id="barcodeInput" autofocus placeholder="Bipe o código de barras aqui..." autocomplete="off">
+    <div id="camera-container">
+        <div id="reader"></div>
     </div>
 
-    <div id="statusMessage" class="status"></div>
+    <button id="btnReset" class="btn-reset" onclick="restartScanner()">Escanear Novamente</button>
+
+    <div id="statusMessage" class="status scanning">Aguardando permissão da câmera...</div>
 
     <table id="resultTable" class="result-table">
         <tbody>
@@ -149,14 +140,14 @@
             </tr>
             <tr>
                 <th>Identificador (AI):</th>
-                <td><span class="badge">(00)</span> SSCC / Handling Unit</td>
+                <td><span class="badge">(00)</span> SSCC / HU</td>
             </tr>
             <tr>
                 <th>Dígito de Extensão:</th>
                 <td id="resExtension" style="font-family: monospace;"></td>
             </tr>
             <tr>
-                <th>Prefixo Empresa / Sequencial:</th>
+                <th>Prefixo / Sequencial:</th>
                 <td id="resSerial" style="font-family: monospace;"></td>
             </tr>
             <tr>
@@ -168,45 +159,73 @@
 </div>
 
 <script>
-    const barcodeInput = document.getElementById('barcodeInput');
+    let html5QrcodeScanner;
     const statusMessage = document.getElementById('statusMessage');
     const resultTable = document.getElementById('resultTable');
+    const btnReset = document.getElementById('btnReset');
 
-    // Mantém o foco no input caso o usuário clique fora
-    document.addEventListener('click', () => {
-        barcodeInput.focus();
-    });
+    function startScanner() {
+        statusMessage.innerText = "Iniciando câmera...";
+        statusMessage.className = "status scanning";
+        resultTable.style.display = 'none';
+        btnReset.style.display = 'none';
 
-    // Processa a entrada do leitor
-    barcodeInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault(); 
-            processBarcode(this.value);
-            this.value = ''; // Limpa para a próxima leitura
-        }
-    });
+        // Configuração do Scanner
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        
+        const config = { 
+            fps: 15, 
+            // Formato retangular (ajustado para códigos de barras longos de caixas/paletes)
+            qrbox: { width: 320, height: 120 },
+            formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ]
+        };
+
+        // Força o uso da câmera traseira (environment)
+        html5QrcodeScanner.start(
+            { facingMode: "environment" }, 
+            config, 
+            onScanSuccess, 
+            onScanFailure
+        ).then(() => {
+            statusMessage.innerText = "Posicione o código de barras na linha verde";
+        }).catch(err => {
+            statusMessage.innerText = "Erro ao acessar a câmera. Certifique-se de usar HTTPS.";
+            statusMessage.className = "status error";
+            console.error(err);
+        });
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        // Interrompe o scanner após a leitura para o usuário ler o resultado estável
+        html5QrcodeScanner.stop().then(() => {
+            processBarcode(decodedText);
+            btnReset.style.display = 'block';
+        }).catch(err => console.error("Erro ao parar o scanner", err));
+    }
+
+    function onScanFailure(error) {
+        // Falhas de leitura acontecem frame a frame enquanto busca o código, não precisamos travar a tela.
+    }
 
     function processBarcode(rawInput) {
-        // Remove parênteses, espaços e letras (limpa a string deixando apenas números)
+        // Limpa a string deixando apenas números
         let cleaned = rawInput.replace(/\D/g, '');
 
-        // Se o código começar com o AI (00), removemos temporariamente para avaliar os 18 dígitos da HU
-        let hasAI = false;
+        // Se o leitor capturar os caracteres de controle GS1 iniciais ou o AI fixo "(00)", remove
         if (cleaned.startsWith('00') && cleaned.length === 20) {
             cleaned = cleaned.substring(2);
-            hasAI = true;
         }
 
-        // Validação: A HU (SSCC-18) precisa ter exatamente 18 dígitos numéricos
+        // Validação da HU (SSCC de 18 dígitos)
         if (cleaned.length === 18) {
-            showStatus('Leitura realizada com sucesso!', 'success');
+            statusMessage.innerText = 'Leitura realizada!';
+            statusMessage.className = 'status success';
             
-            // Quebra dos componentes do GS1-128 (SSCC)
+            // Separa os componentes oficiais do padrão GS1 SSCC-18
             const extensionDigit = cleaned.substring(0, 1);
-            const serialContent = cleaned.substring(1, 17); // Prefixo CNPJ da empresa + sequencial interno
+            const serialContent = cleaned.substring(1, 17); 
             const checkDigit = cleaned.substring(17, 18);
 
-            // Exibe nos campos da tabela
             document.getElementById('resRaw').innerText = `(00) ${cleaned}`;
             document.getElementById('resExtension').innerText = extensionDigit;
             document.getElementById('resSerial').innerText = serialContent;
@@ -214,15 +233,18 @@
 
             resultTable.style.display = 'table';
         } else {
-            showStatus(`Código inválido. Esperado 18 dígitos da HU (Lido: ${cleaned.length} dígitos).`, 'error');
+            statusMessage.innerText = `Código Lido não é uma HU de 18 dígitos (Lido: ${cleaned})`;
+            statusMessage.className = 'status error';
             resultTable.style.display = 'none';
         }
     }
 
-    function showStatus(message, type) {
-        statusMessage.innerText = message;
-        statusMessage.className = `status ${type}`;
+    function restartScanner() {
+        startScanner();
     }
+
+    // Inicializa assim que a página carregar
+    window.addEventListener('DOMContentLoaded', startScanner);
 </script>
 
 </body>
