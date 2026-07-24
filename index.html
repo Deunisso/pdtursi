@@ -3,40 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Leitor HU - Alta Performance</title>
-  
-  <!-- Biblioteca ZXing (Ultra rápida e nativa para Code 128 / GS1-128) -->
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
-
+  <title>Leitor HU - Full Screen AI</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #121212;
-      color: #ffffff;
-      display: flex;
-      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #000;
+      color: #fff;
       height: 100vh;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
-    header {
-      background: #1e1e1e;
-      padding: 15px;
-      text-align: center;
-      font-size: 1.1rem;
-      font-weight: bold;
-      border-bottom: 1px solid #333;
-    }
-
-    /* Container do Vídeo da Câmera */
-    .scanner-container {
+    /* O vídeo ocupa a tela inteira sem restrição */
+    .camera-container {
       position: relative;
       flex: 1;
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 100%;
       overflow: hidden;
     }
 
@@ -46,76 +30,26 @@
       object-fit: cover;
     }
 
-    /* Mira visual no centro da tela */
-    .overlay {
+    /* Painel Flutuante do Resultado */
+    .status-card {
       position: absolute;
-      width: 85%;
-      height: 160px;
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      border-radius: 12px;
-      box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
-      pointer-events: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .laser-line {
-      width: 95%;
-      height: 2px;
-      background-color: #00ff66;
-      box-shadow: 0 0 8px #00ff66;
-      animation: scan 1.5s infinite alternate ease-in-out;
-    }
-
-    @keyframes scan {
-      0% { transform: translateY(-50px); }
-      100% { transform: translateY(50px); }
-    }
-
-    /* Controles e Resultado */
-    .controls {
-      position: absolute;
-      top: 15px;
-      right: 15px;
+      bottom: 20px;
+      left: 5%;
+      width: 90%;
+      background: rgba(30, 30, 30, 0.9);
+      backdrop-filter: blur(10px);
+      padding: 20px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      text-align: center;
       z-index: 10;
     }
 
-    .btn-torch {
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      color: white;
-      padding: 10px;
-      border-radius: 50%;
-      font-size: 18px;
-      backdrop-filter: blur(5px);
-      cursor: pointer;
-    }
-
-    .result-panel {
-      background: #1e1e1e;
-      padding: 20px;
-      border-top-left-radius: 16px;
-      border-top-right-radius: 16px;
-      box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
-    }
-
-    .result-title {
-      font-size: 0.85rem;
-      color: #aaa;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-
-    .result-value {
-      font-size: 1.5rem;
-      font-weight: bold;
-      color: #00ff66;
-      margin: 8px 0;
-      word-break: break-all;
-    }
-
-    .btn-reset {
+    .label { font-size: 0.8rem; color: #aaa; text-transform: uppercase; }
+    .value { font-size: 1.4rem; font-weight: bold; color: #00ff66; margin: 8px 0; }
+    
+    button {
       width: 100%;
       padding: 12px;
       background: #007aff;
@@ -124,157 +58,108 @@
       color: white;
       font-weight: bold;
       font-size: 1rem;
-      cursor: pointer;
-      margin-top: 10px;
     }
-
-    .btn-reset:active { background: #0056b3; }
   </style>
 </head>
 <body>
 
-  <header>Leitor de HU (SSCC)</header>
-
-  <div class="scanner-container">
-    <video id="video"></video>
+  <div class="camera-container">
+    <video id="video" autoplay playsinline muted></video>
     
-    <!-- Retículo de mira visual -->
-    <div class="overlay">
-      <div class="laser-line"></div>
+    <div class="status-card">
+      <div class="label">HU Detectada (00)</div>
+      <div class="value" id="huResult">Aponte para a etiqueta...</div>
+      <button onclick="reiniciar()">Próxima Leitura</button>
     </div>
-
-    <div class="controls">
-      <button class="btn-torch" id="btnTorch" onclick="toggleFlashlight()">💡</button>
-    </div>
-  </div>
-
-  <div class="result-panel">
-    <div class="result-title">HU Identificada (AI 00)</div>
-    <div class="result-value" id="huResult">Aguardando leitura...</div>
-    <button class="btn-reset" onclick="reiniciarLeitura()">Próxima Leitura</button>
   </div>
 
   <script>
-    let codeReader;
-    let selectedDeviceId;
-    let videoTrack;
-    let torchOn = false;
-    let lendo = true;
+    const video = document.getElementById('video');
+    const resultElement = document.getElementById('huResult');
+    let escaneando = true;
+    let detector = null;
 
-    // 1. Som Bip via Web Audio API (Não precisa de arquivo externo .mp3)
+    // 1. Som de confirmação instantâneo
     function playBeep() {
       try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(1800, audioCtx.currentTime); // Frequência do bip industrial
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = 1900;
+        gain.gain.value = 0.1;
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        gain.connect(ctx.destination);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.1);
-      } catch (e) { console.log(e); }
+        osc.stop(ctx.currentTime + 0.08);
+      } catch (e) {}
     }
 
-    // 2. Extração Rápida e Validação de HU (AI 00)
-    function extrairHU(codigoBruto) {
-      // Remove caracteres especiais mantendo apenas números
-      const limpo = codigoBruto.replace(/\D/g, '');
+    // 2. Extrai os 18 dígitos do AI (00) de qualquer código lido na tela
+    function processarCodigos(barcodes) {
+      if (!escaneando) return;
 
-      // Procura pelo padrão GS1 do AI (00):
-      // Deve ter o identificador 00 seguido exatamente dos 18 dígitos da HU (SSCC)
-      const match = limpo.match(/(?:00)?(\d{18})/);
-
-      if (match) {
-        return match[1]; // Retorna apenas os 18 dígitos da HU
-      }
-      return null;
-    }
-
-    // 3. Inicialização de Alta Performance
-    async function inicializarScanner() {
-      // Otimização CHAVE: Restringir a busca EXCLUSIVAMENTE para Code 128
-      const hints = new Map();
-      const formats = [ZXing.BarcodeFormat.CODE_128];
-      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-      hints.set(ZXing.DecodeHintType.TRY_HARDER, true); // Melhora o foco em etiquetas gastas/danificadas
-
-      codeReader = new ZXing.BrowserMultiFormatReader(hints);
-
-      try {
-        const videoInputDevices = await codeReader.listVideoInputDevices();
+      for (const barcode of barcodes) {
+        const limpo = barcode.rawValue.replace(/\D/g, '');
         
-        // Seleciona preferencialmente a câmera traseira ("environment")
-        const backCamera = videoInputDevices.find(device => 
-          device.label.toLowerCase().includes('back') || 
-          device.label.toLowerCase().includes('traseira') ||
-          device.label.toLowerCase().includes('environment')
-        );
+        // Busca padrão do SSCC (18 dígitos)
+        const match = limpo.match(/(?:00)?(\d{18})/);
+        if (match) {
+          escaneando = false;
+          playBeep();
+          if (navigator.vibrate) navigator.vibrate(100);
 
-        selectedDeviceId = backCamera ? backCamera.deviceId : videoInputDevices[0].deviceId;
-
-        // Inicia a captura contínua
-        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
-          if (result && lendo) {
-            const textoLido = result.getText();
-            const hu = extrairHU(textoLido);
-
-            // Se for um código válido do tipo (00) HU
-            if (hu) {
-              lendo = false; // Pausa a leitura para evitar duplicidade
-              
-              // Feedback Visual, Sonoro e Tátil (Vibração)
-              playBeep();
-              if (navigator.vibrate) navigator.vibrate(120);
-
-              document.getElementById('huResult').innerText = "(00) " + hu;
-              
-              // Destaca a borda em verde para confirmar
-              document.querySelector('.overlay').style.borderColor = "#00ff66";
-            }
-            // Se for outro código (ex: Lote ou Material), o algoritmo ignora instantaneamente
-          }
-        });
-
-        // Configuração de Lanterna (Torch) se o navegador permitir
-        setTimeout(capturarVideoTrack, 1000);
-
-      } catch (err) {
-        console.error("Erro ao iniciar câmera:", err);
-        document.getElementById('huResult').innerText = "Erro ao acessar câmera.";
-      }
-    }
-
-    function capturarVideoTrack() {
-      const videoElement = document.getElementById('video');
-      if (videoElement.srcObject) {
-        videoTrack = videoElement.srcObject.getVideoTracks()[0];
-      }
-    }
-
-    function toggleFlashlight() {
-      if (videoTrack) {
-        const capabilities = videoTrack.getCapabilities();
-        if (capabilities.torch) {
-          torchOn = !torchOn;
-          videoTrack.applyConstraints({
-            advanced: [{ torch: torchOn }]
-          });
-        } else {
-          alert("Lanterna não suportada neste dispositivo/navegador.");
+          resultElement.innerText = "(00) " + match[1];
+          return;
         }
       }
     }
 
-    function reiniciarLeitura() {
-      lendo = true;
-      document.getElementById('huResult').innerText = "Aguardando leitura...";
-      document.querySelector('.overlay').style.borderColor = "rgba(255, 255, 255, 0.4)";
+    // 3. Inicializa Câmera em Alta Definição (Full Frame)
+    async function iniciarCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
+        });
+        video.srcObject = stream;
+
+        // Verifica se o navegador suporta a API Nativa de Hardware (Android ML Kit / iOS Vision)
+        if ('BarcodeDetector' in window) {
+          detector = new BarcodeDetector({ formats: ['code_128'] });
+          requestAnimationFrame(loopDeLeituraNativo);
+        } else {
+          resultElement.innerText = "Navegador antigo: use Chrome no Android ou Safari no iOS.";
+        }
+      } catch (err) {
+        resultElement.innerText = "Erro ao acessar a câmera.";
+        console.error(err);
+      }
     }
 
-    // Inicia a câmera automaticamente ao carregar a página
-    window.addEventListener('load', inicializarScanner);
+    // 4. Loop de Leitura Ultra-Rápido (Varre a tela inteira a cada quadro do vídeo)
+    async function loopDeLeituraNativo() {
+      if (escaneando && detector && video.readyState === video.HAVE_ENOUGH_DATA) {
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            processarCodigos(barcodes);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      requestAnimationFrame(loopDeLeituraNativo);
+    }
+
+    function reiniciar() {
+      escaneando = true;
+      resultElement.innerText = "Aponte para a etiqueta...";
+    }
+
+    window.addEventListener('load', iniciarCamera);
   </script>
 </body>
 </html>
