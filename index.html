@@ -2,125 +2,279 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Leitor de HU / SSCC</title>
-  <!-- Biblioteca para leitura via câmera -->
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Leitor HU - Alta Performance</title>
+  
+  <!-- Biblioteca ZXing (Ultra rápida e nativa para Code 128 / GS1-128) -->
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
+
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: Arial, sans-serif;
-      max-width: 500px;
-      margin: 20px auto;
-      padding: 0 15px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #121212;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
     }
-    .box {
-      border: 1px solid #ccc;
+
+    header {
+      background: #1e1e1e;
       padding: 15px;
-      border-radius: 8px;
-      margin-bottom: 15px;
-    }
-    input[type="text"] {
-      width: 100%;
-      padding: 10px;
-      font-size: 16px;
-      box-sizing: border-box;
-      margin-top: 8px;
-    }
-    button {
-      padding: 10px 15px;
-      font-size: 16px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 8px;
-    }
-    #reader {
-      width: 100%;
-      margin-top: 10px;
-    }
-    .resultado {
+      text-align: center;
+      font-size: 1.1rem;
       font-weight: bold;
-      color: green;
-      font-size: 1.1em;
+      border-bottom: 1px solid #333;
+    }
+
+    /* Container do Vídeo da Câmera */
+    .scanner-container {
+      position: relative;
+      flex: 1;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Mira visual no centro da tela */
+    .overlay {
+      position: absolute;
+      width: 85%;
+      height: 160px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-radius: 12px;
+      box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .laser-line {
+      width: 95%;
+      height: 2px;
+      background-color: #00ff66;
+      box-shadow: 0 0 8px #00ff66;
+      animation: scan 1.5s infinite alternate ease-in-out;
+    }
+
+    @keyframes scan {
+      0% { transform: translateY(-50px); }
+      100% { transform: translateY(50px); }
+    }
+
+    /* Controles e Resultado */
+    .controls {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      z-index: 10;
+    }
+
+    .btn-torch {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      padding: 10px;
+      border-radius: 50%;
+      font-size: 18px;
+      backdrop-filter: blur(5px);
+      cursor: pointer;
+    }
+
+    .result-panel {
+      background: #1e1e1e;
+      padding: 20px;
+      border-top-left-radius: 16px;
+      border-top-right-radius: 16px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+    }
+
+    .result-title {
+      font-size: 0.85rem;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .result-value {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #00ff66;
+      margin: 8px 0;
       word-break: break-all;
     }
+
+    .btn-reset {
+      width: 100%;
+      padding: 12px;
+      background: #007aff;
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .btn-reset:active { background: #0056b3; }
   </style>
 </head>
 <body>
 
-  <h2>Leitura de HU (SSCC)</h2>
+  <header>Leitor de HU (SSCC)</header>
 
-  <!-- MÉTODOS DE LEITURA -->
-  <div class="box">
-    <label for="inputBipador"><strong>Leitura por Pistola/Coletor (USB/Bluetooth):</strong></label>
-    <input type="text" id="inputBipador" placeholder="Clique aqui e bipe o código..." autofocus>
+  <div class="scanner-container">
+    <video id="video"></video>
+    
+    <!-- Retículo de mira visual -->
+    <div class="overlay">
+      <div class="laser-line"></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-torch" id="btnTorch" onclick="toggleFlashlight()">💡</button>
+    </div>
   </div>
 
-  <div class="box">
-    <strong>Leitura por Câmera:</strong>
-    <button id="btnCamera" onclick="iniciarCamera()">Abrir Câmera</button>
-    <div id="reader"></div>
-  </div>
-
-  <!-- EXIBIÇÃO DO RESULTADO -->
-  <div class="box">
-    <h3>Dados Extraídos:</h3>
-    <p>Código Bruto: <span id="rawText">-</span></p>
-    <p>Código HU (SSCC): <span id="huCode" class="resultado">-</span></p>
+  <div class="result-panel">
+    <div class="result-title">HU Identificada (AI 00)</div>
+    <div class="result-value" id="huResult">Aguardando leitura...</div>
+    <button class="btn-reset" onclick="reiniciarLeitura()">Próxima Leitura</button>
   </div>
 
   <script>
-    // Função para extrair apenas o número do HU (18 dígitos do AI 00)
-    function processarCodigo(textoLido) {
-      document.getElementById('rawText').innerText = textoLido;
+    let codeReader;
+    let selectedDeviceId;
+    let videoTrack;
+    let torchOn = false;
+    let lendo = true;
 
-      // Limpa caracteres especiais mantendo apenas números
-      const apenasNumeros = textoLido.replace(/\D/g, '');
+    // 1. Som Bip via Web Audio API (Não precisa de arquivo externo .mp3)
+    function playBeep() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(1800, audioCtx.currentTime); // Frequência do bip industrial
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.1);
+      } catch (e) { console.log(e); }
+    }
 
-      // Regex para capturar os 18 dígitos do SSCC
-      // Procura por 18 dígitos sequenciais iniciados ou não pelo prefixo '00'
-      const match = apenasNumeros.match(/(?:00)?(\d{18})/);
+    // 2. Extração Rápida e Validação de HU (AI 00)
+    function extrairHU(codigoBruto) {
+      // Remove caracteres especiais mantendo apenas números
+      const limpo = codigoBruto.replace(/\D/g, '');
+
+      // Procura pelo padrão GS1 do AI (00):
+      // Deve ter o identificador 00 seguido exatamente dos 18 dígitos da HU (SSCC)
+      const match = limpo.match(/(?:00)?(\d{18})/);
 
       if (match) {
-        const huCalculado = match[1];
-        document.getElementById('huCode').innerText = "(00) " + huCalculado;
-      } else {
-        document.getElementById('huCode').innerText = "HU inválida ou formato não reconhecido.";
+        return match[1]; // Retorna apenas os 18 dígitos da HU
+      }
+      return null;
+    }
+
+    // 3. Inicialização de Alta Performance
+    async function inicializarScanner() {
+      // Otimização CHAVE: Restringir a busca EXCLUSIVAMENTE para Code 128
+      const hints = new Map();
+      const formats = [ZXing.BarcodeFormat.CODE_128];
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true); // Melhora o foco em etiquetas gastas/danificadas
+
+      codeReader = new ZXing.BrowserMultiFormatReader(hints);
+
+      try {
+        const videoInputDevices = await codeReader.listVideoInputDevices();
+        
+        // Seleciona preferencialmente a câmera traseira ("environment")
+        const backCamera = videoInputDevices.find(device => 
+          device.label.toLowerCase().includes('back') || 
+          device.label.toLowerCase().includes('traseira') ||
+          device.label.toLowerCase().includes('environment')
+        );
+
+        selectedDeviceId = backCamera ? backCamera.deviceId : videoInputDevices[0].deviceId;
+
+        // Inicia a captura contínua
+        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+          if (result && lendo) {
+            const textoLido = result.getText();
+            const hu = extrairHU(textoLido);
+
+            // Se for um código válido do tipo (00) HU
+            if (hu) {
+              lendo = false; // Pausa a leitura para evitar duplicidade
+              
+              // Feedback Visual, Sonoro e Tátil (Vibração)
+              playBeep();
+              if (navigator.vibrate) navigator.vibrate(120);
+
+              document.getElementById('huResult').innerText = "(00) " + hu;
+              
+              // Destaca a borda em verde para confirmar
+              document.querySelector('.overlay').style.borderColor = "#00ff66";
+            }
+            // Se for outro código (ex: Lote ou Material), o algoritmo ignora instantaneamente
+          }
+        });
+
+        // Configuração de Lanterna (Torch) se o navegador permitir
+        setTimeout(capturarVideoTrack, 1000);
+
+      } catch (err) {
+        console.error("Erro ao iniciar câmera:", err);
+        document.getElementById('huResult').innerText = "Erro ao acessar câmera.";
       }
     }
 
-    // 1. Lógica do Bipador Físico
-    const input = document.getElementById('inputBipador');
-    input.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') {
-        processarCodigo(this.value);
-        this.value = ''; // Limpa para a próxima leitura
+    function capturarVideoTrack() {
+      const videoElement = document.getElementById('video');
+      if (videoElement.srcObject) {
+        videoTrack = videoElement.srcObject.getVideoTracks()[0];
       }
-    });
-
-    // 2. Lógica da Câmera (HTML5 QRCode)
-    let html5QrcodeScanner = null;
-
-    function iniciarCamera() {
-      if (html5QrcodeScanner) return;
-
-      html5QrcodeScanner = new Html5QrcodeScanner(
-        "reader", 
-        { fps: 10, qrbox: { width: 250, height: 150 } },
-        /* verbose= */ false
-      );
-
-      html5QrcodeScanner.render((decodedText) => {
-        processarCodigo(decodedText);
-        html5QrcodeScanner.clear(); // Para a câmera após a leitura com sucesso
-        html5QrcodeScanner = null;
-      }, (error) => {
-        // Erros contínuos de scan são ignorados
-      });
     }
+
+    function toggleFlashlight() {
+      if (videoTrack) {
+        const capabilities = videoTrack.getCapabilities();
+        if (capabilities.torch) {
+          torchOn = !torchOn;
+          videoTrack.applyConstraints({
+            advanced: [{ torch: torchOn }]
+          });
+        } else {
+          alert("Lanterna não suportada neste dispositivo/navegador.");
+        }
+      }
+    }
+
+    function reiniciarLeitura() {
+      lendo = true;
+      document.getElementById('huResult').innerText = "Aguardando leitura...";
+      document.querySelector('.overlay').style.borderColor = "rgba(255, 255, 255, 0.4)";
+    }
+
+    // Inicia a câmera automaticamente ao carregar a página
+    window.addEventListener('load', inicializarScanner);
   </script>
 </body>
 </html>
