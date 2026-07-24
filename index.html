@@ -1,251 +1,126 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leitor GS1-128 HU via Câmera</title>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-    
-    <style>
-        :root {
-            --primary: #2563eb;
-            --background: #f1f5f9;
-            --card-bg: #ffffff;
-            --text: #1e293b;
-            --success: #16a34a;
-            --error: #dc2626;
-        }
-
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--background);
-            color: var(--text);
-            margin: 0;
-            padding: 10px;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            min-height: 100vh;
-            box-sizing: border-box;
-        }
-
-        .container {
-            background-color: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 500px;
-        }
-
-        h2 {
-            margin-top: 0;
-            color: var(--primary);
-            text-align: center;
-            font-size: 1.3rem;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 10px;
-        }
-
-        /* Estilização do container da câmera */
-        #camera-container {
-            width: 100%;
-            border-radius: 8px;
-            overflow: hidden;
-            background: #000;
-            margin-bottom: 15px;
-        }
-
-        .btn-reset {
-            display: none;
-            width: 100%;
-            padding: 12px;
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            margin-bottom: 15px;
-        }
-
-        .status {
-            text-align: center;
-            font-weight: bold;
-            margin-bottom: 15px;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 0.9rem;
-        }
-        .status.scanning { background-color: #e0f2fe; color: #0369a1; }
-        .status.success { background-color: #dcfce7; color: var(--success); }
-        .status.error { background-color: #fee2e2; color: var(--error); }
-
-        .result-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            display: none;
-        }
-
-        .result-table th, .result-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #e2e8f0;
-            font-size: 0.9rem;
-        }
-
-        .result-table th {
-            background-color: #f8fafc;
-            font-weight: 600;
-            width: 45%;
-        }
-
-        .badge {
-            background-color: #e0f2fe;
-            color: #0369a1;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-weight: bold;
-        }
-
-        .raw-code {
-            font-family: monospace;
-            font-size: 1.1rem;
-            letter-spacing: 1px;
-            word-break: break-all;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leitor de HU / SSCC</title>
+  <!-- Biblioteca para leitura via câmera -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: 20px auto;
+      padding: 0 15px;
+    }
+    .box {
+      border: 1px solid #ccc;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      box-sizing: border-box;
+      margin-top: 8px;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 8px;
+    }
+    #reader {
+      width: 100%;
+      margin-top: 10px;
+    }
+    .resultado {
+      font-weight: bold;
+      color: green;
+      font-size: 1.1em;
+      word-break: break-all;
+    }
+  </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Leitor GS1-128 / HU (Câmera)</h2>
-    
-    <div id="camera-container">
-        <div id="reader"></div>
-    </div>
+  <h2>Leitura de HU (SSCC)</h2>
 
-    <button id="btnReset" class="btn-reset" onclick="restartScanner()">Escanear Novamente</button>
+  <!-- MÉTODOS DE LEITURA -->
+  <div class="box">
+    <label for="inputBipador"><strong>Leitura por Pistola/Coletor (USB/Bluetooth):</strong></label>
+    <input type="text" id="inputBipador" placeholder="Clique aqui e bipe o código..." autofocus>
+  </div>
 
-    <div id="statusMessage" class="status scanning">Aguardando permissão da câmera...</div>
+  <div class="box">
+    <strong>Leitura por Câmera:</strong>
+    <button id="btnCamera" onclick="iniciarCamera()">Abrir Câmera</button>
+    <div id="reader"></div>
+  </div>
 
-    <table id="resultTable" class="result-table">
-        <tbody>
-            <tr>
-                <th>Código Lido:</th>
-                <td id="resRaw" class="raw-code"></td>
-            </tr>
-            <tr>
-                <th>Identificador (AI):</th>
-                <td><span class="badge">(00)</span> SSCC / HU</td>
-            </tr>
-            <tr>
-                <th>Dígito de Extensão:</th>
-                <td id="resExtension" style="font-family: monospace;"></td>
-            </tr>
-            <tr>
-                <th>Prefixo / Sequencial:</th>
-                <td id="resSerial" style="font-family: monospace;"></td>
-            </tr>
-            <tr>
-                <th>Dígito Verificador:</th>
-                <td id="resCheckDigit" style="font-family: monospace;"></td>
-            </tr>
-        </tbody>
-    </table>
-</div>
+  <!-- EXIBIÇÃO DO RESULTADO -->
+  <div class="box">
+    <h3>Dados Extraídos:</h3>
+    <p>Código Bruto: <span id="rawText">-</span></p>
+    <p>Código HU (SSCC): <span id="huCode" class="resultado">-</span></p>
+  </div>
 
-<script>
-    let html5QrcodeScanner;
-    const statusMessage = document.getElementById('statusMessage');
-    const resultTable = document.getElementById('resultTable');
-    const btnReset = document.getElementById('btnReset');
+  <script>
+    // Função para extrair apenas o número do HU (18 dígitos do AI 00)
+    function processarCodigo(textoLido) {
+      document.getElementById('rawText').innerText = textoLido;
 
-    function startScanner() {
-        statusMessage.innerText = "Iniciando câmera...";
-        statusMessage.className = "status scanning";
-        resultTable.style.display = 'none';
-        btnReset.style.display = 'none';
+      // Limpa caracteres especiais mantendo apenas números
+      const apenasNumeros = textoLido.replace(/\D/g, '');
 
-        // Configuração do Scanner
-        html5QrcodeScanner = new Html5Qrcode("reader");
-        
-        const config = { 
-            fps: 15, 
-            // Formato retangular (ajustado para códigos de barras longos de caixas/paletes)
-            qrbox: { width: 320, height: 120 },
-            formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ]
-        };
+      // Regex para capturar os 18 dígitos do SSCC
+      // Procura por 18 dígitos sequenciais iniciados ou não pelo prefixo '00'
+      const match = apenasNumeros.match(/(?:00)?(\d{18})/);
 
-        // Força o uso da câmera traseira (environment)
-        html5QrcodeScanner.start(
-            { facingMode: "environment" }, 
-            config, 
-            onScanSuccess, 
-            onScanFailure
-        ).then(() => {
-            statusMessage.innerText = "Posicione o código de barras na linha verde";
-        }).catch(err => {
-            statusMessage.innerText = "Erro ao acessar a câmera. Certifique-se de usar HTTPS.";
-            statusMessage.className = "status error";
-            console.error(err);
-        });
+      if (match) {
+        const huCalculado = match[1];
+        document.getElementById('huCode').innerText = "(00) " + huCalculado;
+      } else {
+        document.getElementById('huCode').innerText = "HU inválida ou formato não reconhecido.";
+      }
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
-        // Interrompe o scanner após a leitura para o usuário ler o resultado estável
-        html5QrcodeScanner.stop().then(() => {
-            processBarcode(decodedText);
-            btnReset.style.display = 'block';
-        }).catch(err => console.error("Erro ao parar o scanner", err));
+    // 1. Lógica do Bipador Físico
+    const input = document.getElementById('inputBipador');
+    input.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        processarCodigo(this.value);
+        this.value = ''; // Limpa para a próxima leitura
+      }
+    });
+
+    // 2. Lógica da Câmera (HTML5 QRCode)
+    let html5QrcodeScanner = null;
+
+    function iniciarCamera() {
+      if (html5QrcodeScanner) return;
+
+      html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader", 
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        /* verbose= */ false
+      );
+
+      html5QrcodeScanner.render((decodedText) => {
+        processarCodigo(decodedText);
+        html5QrcodeScanner.clear(); // Para a câmera após a leitura com sucesso
+        html5QrcodeScanner = null;
+      }, (error) => {
+        // Erros contínuos de scan são ignorados
+      });
     }
-
-    function onScanFailure(error) {
-        // Falhas de leitura acontecem frame a frame enquanto busca o código, não precisamos travar a tela.
-    }
-
-    function processBarcode(rawInput) {
-        // Limpa a string deixando apenas números
-        let cleaned = rawInput.replace(/\D/g, '');
-
-        // Se o leitor capturar os caracteres de controle GS1 iniciais ou o AI fixo "(00)", remove
-        if (cleaned.startsWith('00') && cleaned.length === 20) {
-            cleaned = cleaned.substring(2);
-        }
-
-        // Validação da HU (SSCC de 18 dígitos)
-        if (cleaned.length === 18) {
-            statusMessage.innerText = 'Leitura realizada!';
-            statusMessage.className = 'status success';
-            
-            // Separa os componentes oficiais do padrão GS1 SSCC-18
-            const extensionDigit = cleaned.substring(0, 1);
-            const serialContent = cleaned.substring(1, 17); 
-            const checkDigit = cleaned.substring(17, 18);
-
-            document.getElementById('resRaw').innerText = `(00) ${cleaned}`;
-            document.getElementById('resExtension').innerText = extensionDigit;
-            document.getElementById('resSerial').innerText = serialContent;
-            document.getElementById('resCheckDigit').innerText = checkDigit;
-
-            resultTable.style.display = 'table';
-        } else {
-            statusMessage.innerText = `Código Lido não é uma HU de 18 dígitos (Lido: ${cleaned})`;
-            statusMessage.className = 'status error';
-            resultTable.style.display = 'none';
-        }
-    }
-
-    function restartScanner() {
-        startScanner();
-    }
-
-    // Inicializa assim que a página carregar
-    window.addEventListener('DOMContentLoaded', startScanner);
-</script>
-
+  </script>
 </body>
 </html>
