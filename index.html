@@ -10,28 +10,22 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f6f9; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-    
     .container { width: 100%; max-width: 500px; }
     
-    /* PAINEL DE PROGRESSO */
     .header-panel { background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; text-align: center; }
     .header-panel h2 { font-size: 1.1rem; color: #1a73e8; margin-bottom: 5px; }
     .progress-bar-container { background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 10px; }
     .progress-bar { background: #34a853; height: 100%; width: 0%; transition: width 0.4s ease; }
     
-    /* CAMERA */
     #reader { width: 100%; border-radius: 12px; overflow: hidden; border: 2px solid #dadce0; background: #000; margin-bottom: 15px; }
 
-    /* MENSAGEM DE FEEDBACK */
     #feedback { padding: 10px 15px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; text-align: center; margin-bottom: 15px; display: none; }
     #feedback.sucesso { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     #feedback.erro { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
-    /* LISTA DE MATERIAIS */
     .list-title { font-size: 0.9rem; font-weight: bold; color: #5f6368; margin-bottom: 10px; text-transform: uppercase; }
     .lista-hus { display: flex; flex-direction: column; gap: 10px; }
 
-    /* CARD DE ITEM */
     .hu-card {
       background: #ffffff;
       border: 2px solid #e0e0e0;
@@ -55,7 +49,6 @@
       color: #5f6368;
     }
 
-    /* ESTADO: ENCONTRADO / VERDE */
     .hu-card.encontrado {
       background-color: #e6f4ea;
       border-color: #34a853;
@@ -72,41 +65,40 @@
   <div class="container">
     <div class="header-panel">
       <h2>Lista de Conferência</h2>
-      <div id="progresso-texto" style="font-size: 0.85rem; color: #5f6368;">Carregando lista...</div>
+      <div id="progresso-texto" style="font-size: 0.85rem; color: #5f6368;">Conectando ao Google Sheets...</div>
       <div class="progress-bar-container">
         <div id="progress-bar" class="progress-bar"></div>
       </div>
     </div>
 
-    <!-- Leitor da Câmera -->
     <div id="reader"></div>
-
-    <!-- Alerta visual do último bip -->
     <div id="feedback"></div>
 
     <div class="list-title">Itens para Encontrar:</div>
-    <div id="lista-container" class="lista-hus">
-      <!-- Os cards serão injetados dinamicamente via JS -->
-    </div>
+    <div id="lista-container" class="lista-hus"></div>
   </div>
 
   <script>
+    // ⚠️ COLE AQUI A URL DA SUA IMPLANTAÇÃO DO GOOGLE APPS SCRIPT
+    const APPS_SCRIPT_URL = "SUA_URL_DO_WEB_APP_AQUI";
+
     let listaHUs = [];
     let html5QrCode;
     let aguardandoProcessamento = false;
 
-    // 1. Carrega dados da planilha ao abrir a página
-    function carregarDados() {
-      google.script.run
-        .withSuccessHandler(dados => {
-          listaHUs = dados;
-          renderizarLista();
-          iniciarCamera();
-        })
-        .obterListaHUs();
+    // 1. Busca os dados via API do Apps Script (fetch)
+    async function carregarDados() {
+      try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?action=obterLista`);
+        listaHUs = await response.json();
+        renderizarLista();
+        iniciarCamera();
+      } catch (err) {
+        mostrarFeedback("Erro ao carregar dados do Google Sheets.", false);
+      }
     }
 
-    // 2. Renderiza os cards na tela e calcula o progresso
+    // 2. Renderiza a lista na tela
     function renderizarLista() {
       const container = document.getElementById('lista-container');
       container.innerHTML = '';
@@ -134,15 +126,14 @@
         container.appendChild(card);
       });
 
-      // Atualiza painel de progresso
       const total = listaHUs.length;
       const pct = total > 0 ? Math.round((encontrados / total) * 100) : 0;
       document.getElementById('progresso-texto').innerText = `${encontrados} de ${total} encontrados (${pct}%)`;
       document.getElementById('progress-bar').style.width = `${pct}%`;
     }
 
-    // 3. Função acionada ao bipar o código
-    function onScanSuccess(decodedText) {
+    // 3. Ao bipar a HU
+    async function onScanSuccess(decodedText) {
       if (aguardandoProcessamento) return;
 
       const codigoLido = decodedText.replace(/[\(\)\s]/g, '');
@@ -156,31 +147,34 @@
       }
 
       if (itemExistente.encontrado) {
-        mostrarFeedback(`HU ${codigoLido} já foi bipada anteriormente!`, false);
+        mostrarFeedback(`HU ${codigoLido} já foi bipada!`, false);
         return;
       }
 
-      // Bloqueia leituras repetidas enquanto grava no servidor
       aguardandoProcessamento = true;
 
-      // Atualização INSTANTÂNEA na tela (Feedback visual imediato em verde)
+      // Atualização imediata no frontend (Verde)
       itemExistente.encontrado = true;
       renderizarLista();
       
-      // Rola a tela suavemente até a HU encontrada
       const elementoHU = document.getElementById(`hu-${codigoLido}`);
       if (elementoHU) elementoHU.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
       mostrarFeedback(`HU ${codigoLido} ENCONTRADA!`, true);
 
-      // Atualiza no Google Sheets em segundo plano
-      google.script.run
-        .withSuccessHandler(() => { aguardandoProcessamento = false; })
-        .withFailureHandler(err => {
-          mostrarFeedback(`Erro ao salvar no Sheets: ${err.message}`, false);
-          aguardandoProcessamento = false;
-        })
-        .biparHU(codigoLido);
+      // Envia atualização para a API do Apps Script
+      try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(codigoLido)}`);
+        const res = await response.json();
+        
+        if (!res.sucesso) {
+          mostrarFeedback(`Erro na gravação: ${res.mensagem}`, false);
+        }
+      } catch (err) {
+        mostrarFeedback("Erro ao sincronizar com a planilha.", false);
+      } finally {
+        aguardandoProcessamento = false;
+      }
     }
 
     function mostrarFeedback(texto, sucesso) {
@@ -199,7 +193,7 @@
       try {
         await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
       } catch (err) {
-        mostrarFeedback("Erro ao acessar a câmera traseira.", false);
+        mostrarFeedback("Erro ao acessar a câmera.", false);
       }
     }
 
