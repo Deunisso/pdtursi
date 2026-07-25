@@ -3,34 +3,137 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conferência de HUs (LX02)</title>
+  <title>Conferência de HUs</title>
   
+  <!-- Biblioteca para leitura de QR Code / Código de Barras via Câmera -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: #f4f6f9; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-    .container { width: 100%; max-width: 500px; }
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+    }
     
-    .header-panel { background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; text-align: center; position: relative; }
-    .header-panel h2 { font-size: 1.1rem; color: #1a73e8; margin-bottom: 5px; }
+    body { 
+      background-color: #f4f6f9; 
+      padding: 15px; 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      min-height: 100vh; 
+    }
     
-    /* Indicador de Status */
-    .sync-status { position: absolute; top: 12px; right: 15px; font-size: 0.75rem; color: #5f6368; display: flex; align-items: center; gap: 4px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #34a853; display: inline-block; }
-    .dot.sincronizando { background: #fbbc04; animation: pulse 1s infinite; }
-
-    .progress-bar-container { background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 10px; }
-    .progress-bar { background: #34a853; height: 100%; width: 0%; transition: width 0.4s ease; }
+    .container { 
+      width: 100%; 
+      max-width: 500px; 
+    }
     
-    #reader { width: 100%; border-radius: 12px; overflow: hidden; border: 2px solid #dadce0; background: #000; margin-bottom: 15px; }
+    .header-panel { 
+      background: #ffffff; 
+      padding: 15px; 
+      border-radius: 12px; 
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
+      margin-bottom: 15px; 
+      text-align: center; 
+      position: relative; 
+    }
+    
+    .header-panel h2 { 
+      font-size: 1.1rem; 
+      color: #1a73e8; 
+      margin-bottom: 5px; 
+    }
+    
+    /* Indicador de Status da Sincronização */
+    .sync-status { 
+      position: absolute; 
+      top: 12px; 
+      right: 15px; 
+      font-size: 0.75rem; 
+      color: #5f6368; 
+      display: flex; 
+      align-items: center; 
+      gap: 4px; 
+    }
+    
+    .dot { 
+      width: 8px; 
+      height: 8px; 
+      border-radius: 50%; 
+      background: #34a853; 
+      display: inline-block; 
+    }
+    
+    .dot.sincronizando { 
+      background: #fbbc04; 
+      animation: pulse 1s infinite; 
+    }
 
-    #feedback { padding: 10px 15px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; text-align: center; margin-bottom: 15px; display: none; }
-    #feedback.sucesso { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-    #feedback.erro { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .dot.erro { 
+      background: #ea4335; 
+    }
 
-    .list-title { font-size: 0.9rem; font-weight: bold; color: #5f6368; margin-bottom: 10px; text-transform: uppercase; }
-    .lista-hus { display: flex; flex-direction: column; gap: 10px; }
+    .progress-bar-container { 
+      background: #e0e0e0; 
+      height: 10px; 
+      border-radius: 5px; 
+      overflow: hidden; 
+      margin-top: 10px; 
+    }
+    
+    .progress-bar { 
+      background: #34a853; 
+      height: 100%; 
+      width: 0%; 
+      transition: width 0.4s ease; 
+    }
+    
+    #reader { 
+      width: 100%; 
+      border-radius: 12px; 
+      overflow: hidden; 
+      border: 2px solid #dadce0; 
+      background: #000; 
+      margin-bottom: 15px; 
+    }
+
+    #feedback { 
+      padding: 10px 15px; 
+      border-radius: 8px; 
+      font-weight: bold; 
+      font-size: 0.9rem; 
+      text-align: center; 
+      margin-bottom: 15px; 
+      display: none; 
+    }
+    
+    #feedback.sucesso { 
+      background: #d4edda; 
+      color: #155724; 
+      border: 1px solid #c3e6cb; 
+    }
+    
+    #feedback.erro { 
+      background: #f8d7da; 
+      color: #721c24; 
+      border: 1px solid #f5c6cb; 
+    }
+
+    .list-title { 
+      font-size: 0.9rem; 
+      font-weight: bold; 
+      color: #5f6368; 
+      margin-bottom: 10px; 
+      text-transform: uppercase; 
+    }
+    
+    .lista-hus { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 10px; 
+    }
 
     .hu-card {
       background: #ffffff;
@@ -42,9 +145,23 @@
       align-items: center;
       transition: all 0.3s ease;
     }
-    .hu-info { display: flex; flex-direction: column; gap: 3px; }
-    .hu-codigo { font-weight: bold; font-size: 1rem; color: #202124; }
-    .hu-detalhe { font-size: 0.82rem; color: #5f6368; }
+    
+    .hu-info { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 3px; 
+    }
+    
+    .hu-codigo { 
+      font-weight: bold; 
+      font-size: 1rem; 
+      color: #202124; 
+    }
+    
+    .hu-detalhe { 
+      font-size: 0.82rem; 
+      color: #5f6368; 
+    }
     
     .badge {
       font-size: 0.75rem;
@@ -55,12 +172,16 @@
       color: #5f6368;
     }
 
-    /* ESTADO: ENCONTRADO / VERDE */
+    /* ESTADO DE SUCESSO DO CARD */
     .hu-card.encontrado {
       background-color: #e6f4ea;
       border-color: #34a853;
     }
-    .hu-card.encontrado .hu-codigo { color: #137333; }
+    
+    .hu-card.encontrado .hu-codigo { 
+      color: #137333; 
+    }
+    
     .hu-card.encontrado .badge {
       background-color: #34a853;
       color: #ffffff;
@@ -88,31 +209,35 @@
       </div>
     </div>
 
+    <!-- Leitor da Câmera -->
     <div id="reader"></div>
+
+    <!-- Mensagens de Alerta (Sucesso/Erro) -->
     <div id="feedback"></div>
 
+    <!-- Container da Lista de HUs -->
     <div class="list-title">Itens para Encontrar:</div>
     <div id="lista-container" class="lista-hus"></div>
   </div>
 
   <script>
-    // ⚠️ COLE AQUI A SUA URL DO GOOGLE APPS SCRIPT
+    // ⚠️ SUBSTITUA COM A URL DA SUA IMPLANTAÇÃO DO GOOGLE APPS SCRIPT (TERMINANDO EM /exec)
     const APPS_SCRIPT_URL = "SUA_URL_DO_WEB_APP_AQUI";
 
     let listaHUs = [];
     let html5QrCode;
     let aguardandoProcessamento = false;
 
-    // 1. Inicializa carregando dados e configurando o intervalo de 10 segundos
+    // 1. Inicializa o aplicativo
     async function inicializar() {
       await carregarDadosSilenciosamente();
       iniciarCamera();
       
-      // Sincroniza em segundo plano a cada 10.000ms (10 segundos)
+      // Consulta automática no Google Sheets a cada 10 segundos
       setInterval(carregarDadosSilenciosamente, 10000);
     }
 
-    // 2. Busca atualizações da planilha sem travar a tela
+    // 2. Busca lista atualizada no Google Sheets em segundo plano
     async function carregarDadosSilenciosamente() {
       if (aguardandoProcessamento) return;
 
@@ -121,10 +246,15 @@
       dot.className = "dot sincronizando";
 
       try {
-        const response = await fetch(`${APPS_SCRIPT_URL}?action=obterLista`);
+        const urlBusca = `${APPS_SCRIPT_URL}?action=obterLista`;
+        console.log("🔍 Buscando dados em:", urlBusca);
+
+        const response = await fetch(urlBusca);
         const novosDados = await response.json();
 
-        // Atualiza a tela apenas se houver mudanças nos dados
+        console.log("📦 Dados recebidos do Apps Script:", novosDados);
+
+        // Atualiza a interface apenas se houver mudanças na lista
         if (JSON.stringify(novosDados) !== JSON.stringify(listaHUs)) {
           listaHUs = novosDados;
           renderizarLista();
@@ -133,17 +263,25 @@
         dot.className = "dot";
         texto.innerText = "Sincronizado";
       } catch (err) {
-        dot.className = "dot";
+        console.error("❌ Erro ao consultar a planilha:", err);
+        dot.className = "dot erro";
         texto.innerText = "Offline";
       }
     }
 
-    // 3. Desenha a lista de cards
+    // 3. Renderiza os cards na tela
     function renderizarLista() {
       const container = document.getElementById('lista-container');
       container.innerHTML = '';
 
       let encontrados = 0;
+
+      if (!Array.isArray(listaHUs) || listaHUs.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding: 20px; color:#5f6368;">Nenhuma HU encontrada na planilha.</div>';
+        document.getElementById('progresso-texto').innerText = '0 de 0 encontrados (0%)';
+        document.getElementById('progress-bar').style.width = '0%';
+        return;
+      }
 
       listaHUs.forEach(item => {
         if (item.encontrado) encontrados++;
@@ -172,11 +310,11 @@
       document.getElementById('progress-bar').style.width = `${pct}%`;
     }
 
-    // 4. Ao ler o código com a câmera
+    // 4. Executado quando a câmera faz a leitura
     async function onScanSuccess(decodedText) {
       if (aguardandoProcessamento) return;
 
-      const codigoLido = decodedText.replace(/[\(\)\s]/g, '');
+      const codigoLido = decodedText.replace(/[\(\)\s]/g, '').trim();
       const itemExistente = listaHUs.find(i => i.hu === codigoLido);
 
       if (navigator.vibrate) navigator.vibrate(150);
@@ -193,7 +331,7 @@
 
       aguardandoProcessamento = true;
 
-      // Feedback verde instantâneo no aparelho local
+      // Resposta visual imediata no próprio dispositivo
       itemExistente.encontrado = true;
       renderizarLista();
       
@@ -202,21 +340,28 @@
 
       mostrarFeedback(`HU ${codigoLido} ENCONTRADA!`, true);
 
-      // Envia a atualização para o Google Sheets
+      // Envia gravação para o Google Sheets
       try {
-        const response = await fetch(`${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(codigoLido)}`);
+        const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(codigoLido)}`;
+        console.log("📤 Registrando bip em:", urlBip);
+
+        const response = await fetch(urlBip);
         const res = await response.json();
-        
+
+        console.log("📥 Resposta do registro de bip:", res);
+
         if (!res.sucesso) {
           mostrarFeedback(`Erro na gravação: ${res.mensagem}`, false);
         }
       } catch (err) {
+        console.error("❌ Erro ao enviar bip:", err);
         mostrarFeedback("Erro ao sincronizar com a planilha.", false);
       } finally {
         aguardandoProcessamento = false;
       }
     }
 
+    // Displays alertas visuais instantâneos
     function mostrarFeedback(texto, sucesso) {
       const fb = document.getElementById('feedback');
       fb.innerText = texto;
@@ -226,6 +371,7 @@
       setTimeout(() => { fb.style.display = 'none'; }, 3500);
     }
 
+    // 5. Inicialização da câmera
     async function iniciarCamera() {
       html5QrCode = new Html5Qrcode("reader");
       const config = { fps: 20, qrbox: { width: 280, height: 140 } };
@@ -233,6 +379,7 @@
       try {
         await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
       } catch (err) {
+        console.error("❌ Erro ao abrir câmera:", err);
         mostrarFeedback("Erro ao acessar a câmera.", false);
       }
     }
