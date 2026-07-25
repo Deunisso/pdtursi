@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conferência de HUs</title>
+  <title>Conferência de HUs (Debug Ativo)</title>
   
-  <!-- Biblioteca para leitura de QR Code / Código de Barras via Câmera -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
@@ -46,7 +45,6 @@
       margin-bottom: 5px; 
     }
     
-    /* Indicador de Status da Sincronização */
     .sync-status { 
       position: absolute; 
       top: 12px; 
@@ -109,31 +107,19 @@
       display: none; 
     }
     
-    #feedback.sucesso { 
-      background: #d4edda; 
-      color: #155724; 
-      border: 1px solid #c3e6cb; 
-    }
-    
-    #feedback.erro { 
-      background: #f8d7da; 
-      color: #721c24; 
-      border: 1px solid #f5c6cb; 
-    }
+    #feedback.sucesso { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    #feedback.erro { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
     .list-title { 
       font-size: 0.9rem; 
       font-weight: bold; 
       color: #5f6368; 
+      margin-top: 15px;
       margin-bottom: 10px; 
       text-transform: uppercase; 
     }
     
-    .lista-hus { 
-      display: flex; 
-      flex-direction: column; 
-      gap: 10px; 
-    }
+    .lista-hus { display: flex; flex-direction: column; gap: 10px; }
 
     .hu-card {
       background: #ffffff;
@@ -146,22 +132,9 @@
       transition: all 0.3s ease;
     }
     
-    .hu-info { 
-      display: flex; 
-      flex-direction: column; 
-      gap: 3px; 
-    }
-    
-    .hu-codigo { 
-      font-weight: bold; 
-      font-size: 1rem; 
-      color: #202124; 
-    }
-    
-    .hu-detalhe { 
-      font-size: 0.82rem; 
-      color: #5f6368; 
-    }
+    .hu-info { display: flex; flex-direction: column; gap: 3px; }
+    .hu-codigo { font-weight: bold; font-size: 1rem; color: #202124; }
+    .hu-detalhe { font-size: 0.82rem; color: #5f6368; }
     
     .badge {
       font-size: 0.75rem;
@@ -172,20 +145,30 @@
       color: #5f6368;
     }
 
-    /* ESTADO DE SUCESSO DO CARD */
-    .hu-card.encontrado {
-      background-color: #e6f4ea;
-      border-color: #34a853;
+    .hu-card.encontrado { background-color: #e6f4ea; border-color: #34a853; }
+    .hu-card.encontrado .hu-codigo { color: #137333; }
+    .hu-card.encontrado .badge { background-color: #34a853; color: #ffffff; }
+
+    /* ESTILOS DO PAINEL DE LOG NA TELA */
+    #painel-logs {
+      margin-top: 25px;
+      background: #1e1e1e;
+      color: #00ff66;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 0.75rem;
+      max-height: 250px;
+      overflow-y: auto;
+      width: 100%;
+      border: 1px solid #333;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
     }
-    
-    .hu-card.encontrado .hu-codigo { 
-      color: #137333; 
-    }
-    
-    .hu-card.encontrado .badge {
-      background-color: #34a853;
-      color: #ffffff;
-    }
+    .log-entry { margin-bottom: 5px; border-bottom: 1px solid #2a2a2a; padding-bottom: 3px; word-break: break-all; }
+    .log-time { color: #888; font-size: 0.7rem; }
+    .log-erro { color: #ff5555; font-weight: bold; }
+    .log-aviso { color: #ffaa00; }
+    .log-info { color: #00ddff; }
 
     @keyframes pulse {
       0% { opacity: 1; }
@@ -218,26 +201,45 @@
     <!-- Container da Lista de HUs -->
     <div class="list-title">Itens para Encontrar:</div>
     <div id="lista-container" class="lista-hus"></div>
+
+    <!-- PAINEL DE LOGS VISUAL NA TELA -->
+    <div class="list-title" style="color: #1a73e8; margin-top: 30px;">🐞 Diagnóstico de Conexão:</div>
+    <div id="painel-logs">
+      <div class="log-entry"><span class="log-info">[Sistema] Painel de logs iniciado...</span></div>
+    </div>
   </div>
 
   <script>
-    // ⚠️ SUBSTITUA COM A URL DA SUA IMPLANTAÇÃO DO GOOGLE APPS SCRIPT (TERMINANDO EM /exec)
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
     let listaHUs = [];
     let html5QrCode;
     let aguardandoProcessamento = false;
 
-    // 1. Inicializa o aplicativo
+    // FUNÇÃO PARA IMPRIMIR LOGS DIRETO NA TELA DO NAVEGADOR / CELULAR
+    function logNaTela(mensagem, tipo = 'normal') {
+      const painel = document.getElementById('painel-logs');
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = 'log-entry';
+      
+      let corClasse = '';
+      if (tipo === 'erro') corClasse = 'log-erro';
+      if (tipo === 'aviso') corClasse = 'log-aviso';
+      if (tipo === 'info') corClasse = 'log-info';
+
+      div.innerHTML = `<span class="log-time">[${time}]</span> <span class="${corClasse}">${mensagem}</span>`;
+      painel.prepend(div); // Coloca o log mais recente no topo
+      console.log(`[${time}] ${mensagem}`);
+    }
+
     async function inicializar() {
+      logNaTela("Inicializando sistema...", "info");
       await carregarDadosSilenciosamente();
       iniciarCamera();
-      
-      // Consulta automática no Google Sheets a cada 10 segundos
       setInterval(carregarDadosSilenciosamente, 10000);
     }
 
-    // 2. Busca lista atualizada no Google Sheets em segundo plano
     async function carregarDadosSilenciosamente() {
       if (aguardandoProcessamento) return;
 
@@ -247,29 +249,36 @@
 
       try {
         const urlBusca = `${APPS_SCRIPT_URL}?action=obterLista`;
-        console.log("🔍 Buscando dados em:", urlBusca);
+        logNaTela(`Conectando ao Google Sheets...`, "info");
 
         const response = await fetch(urlBusca);
+        
+        // Verifica se o HTTP status é 200 OK
+        if (!response.ok) {
+          throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
+        }
+
         const novosDados = await response.json();
+        logNaTela(`Sucesso! Recebidos ${novosDados.length} itens.`, "normal");
 
-        console.log("📦 Dados recebidos do Apps Script:", novosDados);
-
-        // Atualiza a interface apenas se houver mudanças na lista
         if (JSON.stringify(novosDados) !== JSON.stringify(listaHUs)) {
           listaHUs = novosDados;
           renderizarLista();
+          logNaTela("Lista atualizada na tela.", "info");
         }
 
         dot.className = "dot";
         texto.innerText = "Sincronizado";
       } catch (err) {
-        console.error("❌ Erro ao consultar a planilha:", err);
+        logNaTela(`FALHA NA CONEXÃO: ${err.message}`, "erro");
+        if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
+          logNaTela("💡 DICA: Isso é quase sempre erro de permissão (CORS) no Google Apps Script. Verifique se o acesso está como 'Qualquer Pessoa'.", "aviso");
+        }
         dot.className = "dot erro";
         texto.innerText = "Offline";
       }
     }
 
-    // 3. Renderiza os cards na tela
     function renderizarLista() {
       const container = document.getElementById('lista-container');
       container.innerHTML = '';
@@ -310,7 +319,6 @@
       document.getElementById('progress-bar').style.width = `${pct}%`;
     }
 
-    // 4. Executado quando a câmera faz a leitura
     async function onScanSuccess(decodedText) {
       if (aguardandoProcessamento) return;
 
@@ -321,17 +329,19 @@
 
       if (!itemExistente) {
         mostrarFeedback(`HU ${codigoLido} não pertence a esta lista!`, false);
+        logNaTela(`Bip ignorado: HU ${codigoLido} não existe na lista.`, "aviso");
         return;
       }
 
       if (itemExistente.encontrado) {
         mostrarFeedback(`HU ${codigoLido} já foi bipada!`, false);
+        logNaTela(`Bip ignorado: HU ${codigoLido} já estava OK.`, "aviso");
         return;
       }
 
       aguardandoProcessamento = true;
+      logNaTela(`Bipado: HU ${codigoLido}. Gravando no Sheets...`, "info");
 
-      // Resposta visual imediata no próprio dispositivo
       itemExistente.encontrado = true;
       renderizarLista();
       
@@ -340,28 +350,25 @@
 
       mostrarFeedback(`HU ${codigoLido} ENCONTRADA!`, true);
 
-      // Envia gravação para o Google Sheets
       try {
         const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(codigoLido)}`;
-        console.log("📤 Registrando bip em:", urlBip);
-
         const response = await fetch(urlBip);
         const res = await response.json();
 
-        console.log("📥 Resposta do registro de bip:", res);
-
-        if (!res.sucesso) {
+        if (res.sucesso) {
+          logNaTela(`Gravação confirmada no Sheets para HU: ${codigoLido}`, "normal");
+        } else {
+          logNaTela(`Erro retornado pelo Sheets: ${res.mensagem}`, "erro");
           mostrarFeedback(`Erro na gravação: ${res.mensagem}`, false);
         }
       } catch (err) {
-        console.error("❌ Erro ao enviar bip:", err);
+        logNaTela(`Falha ao gravar bip no Sheets: ${err.message}`, "erro");
         mostrarFeedback("Erro ao sincronizar com a planilha.", false);
       } finally {
         aguardandoProcessamento = false;
       }
     }
 
-    // Displays alertas visuais instantâneos
     function mostrarFeedback(texto, sucesso) {
       const fb = document.getElementById('feedback');
       fb.innerText = texto;
@@ -371,15 +378,15 @@
       setTimeout(() => { fb.style.display = 'none'; }, 3500);
     }
 
-    // 5. Inicialização da câmera
     async function iniciarCamera() {
       html5QrCode = new Html5Qrcode("reader");
       const config = { fps: 20, qrbox: { width: 280, height: 140 } };
 
       try {
         await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
+        logNaTela("Câmera traseira iniciada com sucesso.", "normal");
       } catch (err) {
-        console.error("❌ Erro ao abrir câmera:", err);
+        logNaTela(`Erro ao iniciar câmera: ${err}`, "erro");
         mostrarFeedback("Erro ao acessar a câmera.", false);
       }
     }
