@@ -1,0 +1,358 @@
+/* Reset */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#000;
+    color:#fff;
+}
+
+/* Vídeo */
+
+.camera-container{
+    position:relative;
+    width:100vw;
+    height:100vh;
+    overflow:hidden;
+    background:#000;
+}
+
+video,
+canvas{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+}
+
+canvas{
+    pointer-events:none;
+}
+
+/* Área de leitura */
+
+.scanner-area{
+
+    position:absolute;
+
+    left:50%;
+    top:50%;
+
+    width:70vw;
+    max-width:420px;
+
+    height:160px;
+
+    transform:translate(-50%,-50%);
+
+    border:3px solid rgba(48,209,88,.85);
+
+    border-radius:18px;
+
+    background:rgba(48,209,88,.05);
+
+    box-shadow:
+        0 0 25px rgba(48,209,88,.25),
+        inset 0 0 25px rgba(48,209,88,.10);
+
+    overflow:hidden;
+
+}
+
+/* Cantos */
+
+.scanner-area::before,
+.scanner-area::after{
+
+    content:"";
+
+    position:absolute;
+
+    width:35px;
+    height:35px;
+
+    border:4px solid #30d158;
+
+}
+
+.scanner-area::before{
+
+    top:-3px;
+    left:-3px;
+
+    border-right:none;
+    border-bottom:none;
+
+}
+
+.scanner-area::after{
+
+    bottom:-3px;
+    right:-3px;
+
+    border-left:none;
+    border-top:none;
+
+}
+
+/* Linha animada */
+
+.scanner-line{
+
+    position:absolute;
+
+    left:0;
+
+    width:100%;
+
+    height:3px;
+
+    background:#30d158;
+
+    box-shadow:0 0 20px #30d158;
+
+    animation:scanner 2.1s linear infinite;
+
+}
+
+@keyframes scanner{
+
+0%{
+
+top:0;
+
+}
+
+50%{
+
+top:calc(100% - 3px);
+
+}
+
+100%{
+
+top:0;
+
+}
+
+}
+
+/* Card */
+
+.status-card{
+
+    position:absolute;
+
+    left:50%;
+    bottom:20px;
+
+    transform:translateX(-50%);
+
+    width:92%;
+
+    max-width:550px;
+
+    background:rgba(18,18,18,.82);
+
+    backdrop-filter:blur(14px);
+
+    border-radius:22px;
+
+    padding:20px;
+
+    border:1px solid rgba(255,255,255,.08);
+
+    box-shadow:
+        0 12px 35px rgba(0,0,0,.55);
+
+}
+
+/* Cabeçalho */
+
+.status-top{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+}
+
+.label{
+
+    color:#999;
+
+    font-size:.72rem;
+
+    letter-spacing:1px;
+
+    text-transform:uppercase;
+
+}
+
+.status{
+
+    margin-top:6px;
+
+    font-size:1.05rem;
+
+    font-weight:700;
+
+    color:#30d158;
+
+}
+
+.divider{
+
+    margin:15px 0;
+
+    height:1px;
+
+    background:rgba(255,255,255,.08);
+
+}
+
+/* Resultado */
+
+.value{
+
+    margin-top:10px;
+
+    font-size:1.45rem;
+
+    font-weight:700;
+
+    color:#fff;
+
+    word-break:break-all;
+
+}
+
+/* LED */
+
+.led{
+
+    width:16px;
+
+    height:16px;
+
+    border-radius:50%;
+
+    background:#30d158;
+
+    box-shadow:
+        0 0 10px #30d158,
+        0 0 25px #30d158;
+
+    animation:ledPulse 1.4s infinite;
+
+}
+
+@keyframes ledPulse{
+
+0%,100%{
+
+opacity:1;
+
+}
+
+50%{
+
+opacity:.35;
+
+}
+
+}
+
+/* Botões */
+
+.buttons{
+
+    margin-top:20px;
+
+    display:flex;
+
+    gap:12px;
+
+}
+
+button{
+
+    flex:1;
+
+    border:none;
+
+    border-radius:12px;
+
+    padding:14px;
+
+    font-size:1rem;
+
+    font-weight:700;
+
+    cursor:pointer;
+
+    transition:.2s;
+
+}
+
+button:active{
+
+    transform:scale(.96);
+
+}
+
+/* Nova leitura */
+
+#btnRestart{
+
+    background:#0a84ff;
+
+    color:#fff;
+
+}
+
+/* Lanterna */
+
+#btnTorch{
+
+    background:#30d158;
+
+    color:#000;
+
+}
+
+/* Responsividade */
+
+@media(max-width:500px){
+
+.scanner-area{
+
+height:140px;
+width:82vw;
+
+}
+
+.value{
+
+font-size:1.15rem;
+
+}
+
+.status-card{
+
+padding:16px;
+
+}
+
+}
