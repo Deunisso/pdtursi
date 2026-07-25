@@ -3,178 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conferência de HUs (Debug Ativo)</title>
+  <title>Conferência de HUs (Otimizado GS1-128)</title>
   
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-    * { 
-      box-sizing: border-box; 
-      margin: 0; 
-      padding: 0; 
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f4f6f9; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    .container { width: 100%; max-width: 500px; }
+    .header-panel { background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; text-align: center; position: relative; }
+    .header-panel h2 { font-size: 1.1rem; color: #1a73e8; margin-bottom: 5px; }
+    .sync-status { position: absolute; top: 12px; right: 15px; font-size: 0.75rem; color: #5f6368; display: flex; align-items: center; gap: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #34a853; display: inline-block; }
+    .dot.sincronizando { background: #fbbc04; animation: pulse 1s infinite; }
+    .dot.erro { background: #ea4335; }
+    .progress-bar-container { background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 10px; }
+    .progress-bar { background: #34a853; height: 100%; width: 0%; transition: width 0.4s ease; }
     
-    body { 
-      background-color: #f4f6f9; 
-      padding: 15px; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      min-height: 100vh; 
-    }
+    #reader { width: 100%; border-radius: 12px; overflow: hidden; border: 2px solid #dadce0; background: #000; margin-bottom: 15px; }
     
-    .container { 
-      width: 100%; 
-      max-width: 500px; 
-    }
-    
-    .header-panel { 
-      background: #ffffff; 
-      padding: 15px; 
-      border-radius: 12px; 
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
-      margin-bottom: 15px; 
-      text-align: center; 
-      position: relative; 
-    }
-    
-    .header-panel h2 { 
-      font-size: 1.1rem; 
-      color: #1a73e8; 
-      margin-bottom: 5px; 
-    }
-    
-    .sync-status { 
-      position: absolute; 
-      top: 12px; 
-      right: 15px; 
-      font-size: 0.75rem; 
-      color: #5f6368; 
-      display: flex; 
-      align-items: center; 
-      gap: 4px; 
-    }
-    
-    .dot { 
-      width: 8px; 
-      height: 8px; 
-      border-radius: 50%; 
-      background: #34a853; 
-      display: inline-block; 
-    }
-    
-    .dot.sincronizando { 
-      background: #fbbc04; 
-      animation: pulse 1s infinite; 
-    }
-
-    .dot.erro { 
-      background: #ea4335; 
-    }
-
-    .progress-bar-container { 
-      background: #e0e0e0; 
-      height: 10px; 
-      border-radius: 5px; 
-      overflow: hidden; 
-      margin-top: 10px; 
-    }
-    
-    .progress-bar { 
-      background: #34a853; 
-      height: 100%; 
-      width: 0%; 
-      transition: width 0.4s ease; 
-    }
-    
-    #reader { 
-      width: 100%; 
-      border-radius: 12px; 
-      overflow: hidden; 
-      border: 2px solid #dadce0; 
-      background: #000; 
-      margin-bottom: 15px; 
-    }
-
-    #feedback { 
-      padding: 10px 15px; 
-      border-radius: 8px; 
-      font-weight: bold; 
-      font-size: 0.9rem; 
-      text-align: center; 
-      margin-bottom: 15px; 
-      display: none; 
-    }
-    
+    #feedback { padding: 10px 15px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; text-align: center; margin-bottom: 15px; display: none; }
     #feedback.sucesso { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     #feedback.erro { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
 
-    .list-title { 
-      font-size: 0.9rem; 
-      font-weight: bold; 
-      color: #5f6368; 
-      margin-top: 15px;
-      margin-bottom: 10px; 
-      text-transform: uppercase; 
-    }
-    
+    .list-title { font-size: 0.9rem; font-weight: bold; color: #5f6368; margin-top: 15px; margin-bottom: 10px; text-transform: uppercase; }
     .lista-hus { display: flex; flex-direction: column; gap: 10px; }
 
-    .hu-card {
-      background: #ffffff;
-      border: 2px solid #e0e0e0;
-      border-radius: 10px;
-      padding: 12px 15px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: all 0.3s ease;
-    }
-    
+    .hu-card { background: #ffffff; border: 2px solid #e0e0e0; border-radius: 10px; padding: 12px 15px; display: flex; justify-content: space-between; align-items: center; transition: all 0.3s ease; }
     .hu-info { display: flex; flex-direction: column; gap: 3px; }
     .hu-codigo { font-weight: bold; font-size: 1rem; color: #202124; }
     .hu-detalhe { font-size: 0.82rem; color: #5f6368; }
-    
-    .badge {
-      font-size: 0.75rem;
-      font-weight: bold;
-      padding: 5px 10px;
-      border-radius: 20px;
-      background: #e8eaed;
-      color: #5f6368;
-    }
+    .badge { font-size: 0.75rem; font-weight: bold; padding: 5px 10px; border-radius: 20px; background: #e8eaed; color: #5f6368; }
 
     .hu-card.encontrado { background-color: #e6f4ea; border-color: #34a853; }
     .hu-card.encontrado .hu-codigo { color: #137333; }
     .hu-card.encontrado .badge { background-color: #34a853; color: #ffffff; }
 
     /* ESTILOS DO PAINEL DE LOG NA TELA */
-    #painel-logs {
-      margin-top: 25px;
-      background: #1e1e1e;
-      color: #00ff66;
-      border-radius: 8px;
-      padding: 10px;
-      font-family: monospace;
-      font-size: 0.75rem;
-      max-height: 250px;
-      overflow-y: auto;
-      width: 100%;
-      border: 1px solid #333;
-      box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
-    }
+    #painel-logs { margin-top: 25px; background: #1e1e1e; color: #00ff66; border-radius: 8px; padding: 10px; font-family: monospace; font-size: 0.75rem; max-height: 200px; overflow-y: auto; width: 100%; border: 1px solid #333; }
     .log-entry { margin-bottom: 5px; border-bottom: 1px solid #2a2a2a; padding-bottom: 3px; word-break: break-all; }
     .log-time { color: #888; font-size: 0.7rem; }
     .log-erro { color: #ff5555; font-weight: bold; }
     .log-aviso { color: #ffaa00; }
     .log-info { color: #00ddff; }
 
-    @keyframes pulse {
-      0% { opacity: 1; }
-      50% { opacity: 0.3; }
-      100% { opacity: 1; }
-    }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
   </style>
 </head>
 <body>
@@ -202,10 +75,10 @@
     <div class="list-title">Itens para Encontrar:</div>
     <div id="lista-container" class="lista-hus"></div>
 
-    <!-- PAINEL DE LOGS VISUAL NA TELA -->
-    <div class="list-title" style="color: #1a73e8; margin-top: 30px;">🐞 Diagnóstico de Conexão:</div>
+    <!-- PAINEL DE LOGS -->
+    <div class="list-title" style="color: #1a73e8; margin-top: 30px;">🐞 Diagnóstico em Tempo Real:</div>
     <div id="painel-logs">
-      <div class="log-entry"><span class="log-info">[Sistema] Painel de logs iniciado...</span></div>
+      <div class="log-entry"><span class="log-info">[Sistema] Aguardando leitura...</span></div>
     </div>
   </div>
 
@@ -216,7 +89,6 @@
     let html5QrCode;
     let aguardandoProcessamento = false;
 
-    // FUNÇÃO PARA IMPRIMIR LOGS DIRETO NA TELA DO NAVEGADOR / CELULAR
     function logNaTela(mensagem, tipo = 'normal') {
       const painel = document.getElementById('painel-logs');
       const time = new Date().toLocaleTimeString();
@@ -229,12 +101,25 @@
       if (tipo === 'info') corClasse = 'log-info';
 
       div.innerHTML = `<span class="log-time">[${time}]</span> <span class="${corClasse}">${mensagem}</span>`;
-      painel.prepend(div); // Coloca o log mais recente no topo
+      painel.prepend(div);
       console.log(`[${time}] ${mensagem}`);
     }
 
+    // 🚀 NOVO TRATADOR DE CÓDIGO GS1-128 / SSCC
+    function limparCodigoHU(textoRaw) {
+      // 1. Remove qualquer caractere que não seja número (parênteses, espaços, colchetes ou prefixos ]C1)
+      let limpo = textoRaw.replace(/[^\d]/g, '');
+      
+      // 2. Regra SAP vs GS1: Se leu 20 dígitos começando com '00' (Ex: 00178910240423291959),
+      // removemos os dois zeros iniciais para bater com os 18 dígitos da planilha (178910240423291959)
+      if (limpo.length === 20 && limpo.startsWith('00')) {
+        limpo = limpo.substring(2);
+      }
+      
+      return limpo;
+    }
+
     async function inicializar() {
-      logNaTela("Inicializando sistema...", "info");
       await carregarDadosSilenciosamente();
       iniciarCamera();
       setInterval(carregarDadosSilenciosamente, 10000);
@@ -242,38 +127,23 @@
 
     async function carregarDadosSilenciosamente() {
       if (aguardandoProcessamento) return;
-
       const dot = document.getElementById('sync-dot');
       const texto = document.getElementById('sync-texto');
       dot.className = "dot sincronizando";
 
       try {
         const urlBusca = `${APPS_SCRIPT_URL}?action=obterLista`;
-        logNaTela(`Conectando ao Google Sheets...`, "info");
-
         const response = await fetch(urlBusca);
-        
-        // Verifica se o HTTP status é 200 OK
-        if (!response.ok) {
-          throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const novosDados = await response.json();
-        logNaTela(`Sucesso! Recebidos ${novosDados.length} itens.`, "normal");
-
         if (JSON.stringify(novosDados) !== JSON.stringify(listaHUs)) {
           listaHUs = novosDados;
           renderizarLista();
-          logNaTela("Lista atualizada na tela.", "info");
         }
-
         dot.className = "dot";
         texto.innerText = "Sincronizado";
       } catch (err) {
-        logNaTela(`FALHA NA CONEXÃO: ${err.message}`, "erro");
-        if (err.message.includes("Failed to fetch") || err.message.includes("NetworkError")) {
-          logNaTela("💡 DICA: Isso é quase sempre erro de permissão (CORS) no Google Apps Script. Verifique se o acesso está como 'Qualquer Pessoa'.", "aviso");
-        }
         dot.className = "dot erro";
         texto.innerText = "Offline";
       }
@@ -282,34 +152,26 @@
     function renderizarLista() {
       const container = document.getElementById('lista-container');
       container.innerHTML = '';
-
       let encontrados = 0;
 
       if (!Array.isArray(listaHUs) || listaHUs.length === 0) {
-        container.innerHTML = '<div style="text-align:center; padding: 20px; color:#5f6368;">Nenhuma HU encontrada na planilha.</div>';
-        document.getElementById('progresso-texto').innerText = '0 de 0 encontrados (0%)';
-        document.getElementById('progress-bar').style.width = '0%';
+        container.innerHTML = '<div style="text-align:center; padding: 20px; color:#5f6368;">Nenhuma HU na planilha.</div>';
         return;
       }
 
       listaHUs.forEach(item => {
         if (item.encontrado) encontrados++;
-
         const card = document.createElement('div');
         card.id = `hu-${item.hu}`;
         card.className = `hu-card ${item.encontrado ? 'encontrado' : ''}`;
-        
         card.innerHTML = `
           <div class="hu-info">
             <div class="hu-codigo">HU: ${item.hu}</div>
             <div class="hu-detalhe"><strong>Bin:</strong> ${item.posicao} | <strong>Mat:</strong> ${item.material}</div>
             <div class="hu-detalhe">${item.descricao}</div>
           </div>
-          <div>
-            <span class="badge">${item.encontrado ? '✓ OK' : 'Pendente'}</span>
-          </div>
+          <div><span class="badge">${item.encontrado ? '✓ OK' : 'Pendente'}</span></div>
         `;
-
         container.appendChild(card);
       });
 
@@ -322,26 +184,26 @@
     async function onScanSuccess(decodedText) {
       if (aguardandoProcessamento) return;
 
-      const codigoLido = decodedText.replace(/[\(\)\s]/g, '').trim();
-      const itemExistente = listaHUs.find(i => i.hu === codigoLido);
+      // Limpa e padroniza o código lido pela câmera
+      const codigoLido = limparCodigoHU(decodedText);
+      logNaTela(`Leitura Bruta: "${decodedText}" ➔ HU Tratada: "${codigoLido}"`, "info");
+
+      const itemExistente = listaHUs.find(i => String(i.hu).trim() === codigoLido);
 
       if (navigator.vibrate) navigator.vibrate(150);
 
       if (!itemExistente) {
-        mostrarFeedback(`HU ${codigoLido} não pertence a esta lista!`, false);
-        logNaTela(`Bip ignorado: HU ${codigoLido} não existe na lista.`, "aviso");
+        mostrarFeedback(`HU ${codigoLido} não está na lista!`, false);
+        logNaTela(`ALERTA: HU ${codigoLido} não encontrada entre os itens pendentes.`, "aviso");
         return;
       }
 
       if (itemExistente.encontrado) {
         mostrarFeedback(`HU ${codigoLido} já foi bipada!`, false);
-        logNaTela(`Bip ignorado: HU ${codigoLido} já estava OK.`, "aviso");
         return;
       }
 
       aguardandoProcessamento = true;
-      logNaTela(`Bipado: HU ${codigoLido}. Gravando no Sheets...`, "info");
-
       itemExistente.encontrado = true;
       renderizarLista();
       
@@ -356,14 +218,12 @@
         const res = await response.json();
 
         if (res.sucesso) {
-          logNaTela(`Gravação confirmada no Sheets para HU: ${codigoLido}`, "normal");
+          logNaTela(`✓ HU ${codigoLido} gravada com sucesso no Google Sheets!`, "normal");
         } else {
-          logNaTela(`Erro retornado pelo Sheets: ${res.mensagem}`, "erro");
-          mostrarFeedback(`Erro na gravação: ${res.mensagem}`, false);
+          logNaTela(`Erro na planilha: ${res.mensagem}`, "erro");
         }
       } catch (err) {
-        logNaTela(`Falha ao gravar bip no Sheets: ${err.message}`, "erro");
-        mostrarFeedback("Erro ao sincronizar com a planilha.", false);
+        logNaTela(`Erro ao enviar bip: ${err.message}`, "erro");
       } finally {
         aguardandoProcessamento = false;
       }
@@ -374,17 +234,35 @@
       fb.innerText = texto;
       fb.className = sucesso ? 'sucesso' : 'erro';
       fb.style.display = 'block';
-
       setTimeout(() => { fb.style.display = 'none'; }, 3500);
     }
 
+    // 🚀 OTIMIZAÇÃO DA CÂMERA PARA CÓDIGO DE BARRAS LONGO (GS1-128 / CODE 128)
     async function iniciarCamera() {
-      html5QrCode = new Html5Qrcode("reader");
-      const config = { fps: 20, qrbox: { width: 280, height: 140 } };
+      // Habilita explicitamente o suporte aos formatos lineares de logística
+      html5QrCode = new Html5Qrcode("reader", {
+        formatsToSupport: [ 
+          Html5QrcodeSupportedFormats.CODE_128, 
+          Html5QrcodeSupportedFormats.EAN_13, 
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.ITF 
+        ]
+      });
+
+      const config = { 
+        fps: 20, 
+        // Área de leitura larga e retangular (ideal para códigos horizontais longos)
+        qrbox: { width: 320, height: 130 },
+        aspectRatio: 1.777778, // Proporção 16:9
+        experimentalFeatures: {
+          // Usa a aceleração de hardware nativa do celular/navegador (muito mais precisa para barras finas)
+          useBarCodeDetectorIfSupported: true 
+        }
+      };
 
       try {
         await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
-        logNaTela("Câmera traseira iniciada com sucesso.", "normal");
+        logNaTela("Câmera otimizada para Code 128 / GS1 iniciada.", "normal");
       } catch (err) {
         logNaTela(`Erro ao iniciar câmera: ${err}`, "erro");
         mostrarFeedback("Erro ao acessar a câmera.", false);
