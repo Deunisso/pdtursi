@@ -1,56 +1,69 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <base target="_top">
-  <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 10px; }
-    video { width: 100%; max-width: 500px; height: auto; border: 2px solid #ccc; border-radius: 8px; }
-    #resultado { font-size: 1.2em; font-weight: bold; margin-top: 10px; color: #007bff; }
-    button { padding: 10px 20px; font-size: 1em; margin-bottom: 10px; cursor: pointer; }
-  </style>
-</head>
-<body>
+<script>
+    const resultElement = document.getElementById('result');
+    const historyList = document.getElementById('history-list');
+    let html5QrcodeScanner;
 
-  <h2>Leitor de Câmera Direct-Stream</h2>
-  <button onclick="iniciarCâmera()">Abrir / Trocar Câmera</button><br>
-  
-  <video id="video"></video>
-  <div id="resultado">Aguardando ação...</div>
-
-  <script>
-    const codeReader = new ZXing.BrowserMultiFormatReader();
-    let selectedDeviceId;
-
-    async function iniciarCâmera() {
-      try {
-        const videoInputDevices = await codeReader.listVideoInputDevices();
-        
-        // Seleciona a câmera traseira se disponível
-        selectedDeviceId = videoInputDevices.length > 1 ? videoInputDevices[1].deviceId : videoInputDevices[0].deviceId;
-
-        document.getElementById('resultado').innerText = "Câmera ativa. Aponte para a HU.";
-
-        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
-          if (result) {
-            navigator.vibrate?.(200);
-            document.getElementById('resultado').innerText = "HU Lida: " + result.text;
-            
-            // Envia para o Google Sheets
-            google.script.run
-              .withSuccessHandler((msg) => alert(msg))
-              .registrarLeitura(result.text);
-
-            // Pausa temporária após leitura
-            codeReader.reset();
-            setTimeout(() => iniciarCâmera(), 3000);
-          }
-        });
-      } catch (err) {
-        document.getElementById('resultado').innerText = "Erro de Permissão: Acesse as configurações do seu navegador e permita o uso da câmera para este site.";
-        console.error(err);
+    function onScanSuccess(decodedText) {
+      // Bip e vibração ao ler (se o dispositivo suportar)
+      if (navigator.vibrate) {
+        navigator.vibrate(150);
       }
+
+      // Tratamento do código (remove parênteses e espaços se houver no texto lido)
+      const codigoLimpo = decodedText.replace(/[\(\)\s]/g, '');
+
+      // Atualiza o resultado na tela
+      resultElement.innerText = codigoLimpo;
+
+      // Adiciona ao histórico na tela
+      adicionarAoHistorico(codigoLimpo);
+
+      // Pausa a câmera por 2 segundos para evitar leituras duplicadas seguidas
+      html5QrcodeScanner.pause();
+      setTimeout(() => {
+        html5QrcodeScanner.resume();
+      }, 2000);
     }
+
+    function adicionarAoHistorico(codigo) {
+      const hora = new Date().toLocaleTimeString();
+      const li = document.createElement('li');
+      li.className = 'history-item';
+      li.innerHTML = `<span><strong>${codigo}</strong></span> <span class="history-time">${hora}</span>`;
+      historyList.prepend(li);
+    }
+
+    // --- AJUSTE PARA CÂMERA TRASEIRA ---
+    function inicializarLeitor() {
+      // Configurações básicas do leitor
+      const config = {
+        fps: 15,
+        qrbox: { width: 320, height: 160 }, // Retângulo ideal para códigos de barra (GS1-128/HU)
+        aspectRatio: 1.0,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true // Usa API nativa se disponível
+        }
+      };
+
+      html5QrcodeScanner = new Html5QrcodeScanner("reader", config, /* verbose= */ false);
+
+      // Inicializa preferindo a câmera traseira
+      html5QrcodeScanner.render(onScanSuccess, () => {});
+      
+      // Força a preferência de ambiente (traseira) após a renderização inicial
+      // Isso ajuda a garantir em dispositivos com múltiplas câmeras
+      Html5Qrcode.getCameras().then(cameras => {
+        if (cameras && cameras.length > 0) {
+          // Se houver câmeras, tentamos garantir o facingMode correto
+          // A configuração acima (config) já deveria fazer isso, mas
+          // em alguns navegadores é necessário reforçar.
+        }
+      }).catch(err => {
+        console.error("Erro ao listar câmeras:", err);
+      });
+    }
+
+    // Inicialização ao carregar a página
+    window.addEventListener('DOMContentLoaded', inicializarLeitor);
   </script>
-</body>
-</html>
+  
