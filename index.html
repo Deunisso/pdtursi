@@ -1,93 +1,56 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
-
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-    <title>Leitor HU Industrial</title>
-
-    <!-- PWA -->
-    <meta name="theme-color" content="#121212">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-    <!-- CSS -->
-    <link rel="stylesheet" href="style.css">
-
-    <!-- ZXing (compatibilidade Chrome + Safari + iPhone + Android) -->
-    <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <base target="_top">
+  <script type="text/javascript" src="https://unpkg.com/@zxing/library@latest"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 10px; }
+    video { width: 100%; max-width: 500px; height: auto; border: 2px solid #ccc; border-radius: 8px; }
+    #resultado { font-size: 1.2em; font-weight: bold; margin-top: 10px; color: #007bff; }
+    button { padding: 10px 20px; font-size: 1em; margin-bottom: 10px; cursor: pointer; }
+  </style>
 </head>
-
 <body>
 
-    <div class="camera-container">
+  <h2>Leitor de Câmera Direct-Stream</h2>
+  <button onclick="iniciarCâmera()">Abrir / Trocar Câmera</button><br>
+  
+  <video id="video"></video>
+  <div id="resultado">Aguardando ação...</div>
 
-        <!-- Câmera -->
-        <video id="video" autoplay playsinline muted></video>
+  <script>
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    let selectedDeviceId;
 
-        <!-- Canvas onde será desenhada a caixa verde -->
-        <canvas id="overlay"></canvas>
+    async function iniciarCâmera() {
+      try {
+        const videoInputDevices = await codeReader.listVideoInputDevices();
+        
+        // Seleciona a câmera traseira se disponível
+        selectedDeviceId = videoInputDevices.length > 1 ? videoInputDevices[1].deviceId : videoInputDevices[0].deviceId;
 
-        <!-- Mira central -->
-        <div class="scanner-area">
-            <div class="scanner-line"></div>
-        </div>
+        document.getElementById('resultado').innerText = "Câmera ativa. Aponte para a HU.";
 
-        <!-- Painel inferior -->
-        <div class="status-card">
+        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+          if (result) {
+            navigator.vibrate?.(200);
+            document.getElementById('resultado').innerText = "HU Lida: " + result.text;
+            
+            // Envia para o Google Sheets
+            google.script.run
+              .withSuccessHandler((msg) => alert(msg))
+              .registrarLeitura(result.text);
 
-            <div class="status-top">
-
-                <div>
-                    <div class="label">
-                        STATUS
-                    </div>
-
-                    <div id="statusLabel" class="status">
-                        Inicializando...
-                    </div>
-                </div>
-
-                <div class="led" id="led"></div>
-
-            </div>
-
-            <div class="divider"></div>
-
-            <div class="label">
-                HU LIDA
-            </div>
-
-            <div id="huResult" class="value">
-                Aguardando...
-            </div>
-
-            <div class="buttons">
-
-                <button id="btnRestart">
-                    Nova leitura
-                </button>
-
-                <button id="btnTorch">
-                    Lanterna
-                </button>
-
-            </div>
-
-        </div>
-
-    </div>
-
-    <!-- Som do bip -->
-    <audio id="beep" preload="auto">
-        <source src="beep.mp3" type="audio/mpeg">
-    </audio>
-
-    <!-- JavaScript -->
-    <script src="script.js"></script>
-
+            // Pausa temporária após leitura
+            codeReader.reset();
+            setTimeout(() => iniciarCâmera(), 3000);
+          }
+        });
+      } catch (err) {
+        document.getElementById('resultado').innerText = "Erro de Permissão: Acesse as configurações do seu navegador e permita o uso da câmera para este site.";
+        console.error(err);
+      }
+    }
+  </script>
 </body>
-
 </html>
