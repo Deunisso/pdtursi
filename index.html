@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conferência de HUs</title>
+  <title>Conferência de HUs (Sincronizado)</title>
   
   <script src="https://unpkg.com/html5-qrcode"></script>
 
@@ -12,8 +12,14 @@
     body { background-color: #f4f6f9; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
     .container { width: 100%; max-width: 500px; }
     
-    .header-panel { background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; text-align: center; }
+    .header-panel { background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; text-align: center; position: relative; }
     .header-panel h2 { font-size: 1.1rem; color: #1a73e8; margin-bottom: 5px; }
+    
+    /* Indicador de Status */
+    .sync-status { position: absolute; top: 12px; right: 15px; font-size: 0.75rem; color: #5f6368; display: flex; align-items: center; gap: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #34a853; display: inline-block; }
+    .dot.sincronizando { background: #fbbc04; animation: pulse 1s infinite; }
+
     .progress-bar-container { background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 10px; }
     .progress-bar { background: #34a853; height: 100%; width: 0%; transition: width 0.4s ease; }
     
@@ -49,6 +55,7 @@
       color: #5f6368;
     }
 
+    /* ESTADO: ENCONTRADO / VERDE */
     .hu-card.encontrado {
       background-color: #e6f4ea;
       border-color: #34a853;
@@ -58,14 +65,24 @@
       background-color: #34a853;
       color: #ffffff;
     }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.3; }
+      100% { opacity: 1; }
+    }
   </style>
 </head>
 <body>
 
   <div class="container">
     <div class="header-panel">
+      <div class="sync-status">
+        <span id="sync-dot" class="dot"></span>
+        <span id="sync-texto">Conectando...</span>
+      </div>
       <h2>Lista de Conferência</h2>
-      <div id="progresso-texto" style="font-size: 0.85rem; color: #5f6368;">Conectando ao Google Sheets...</div>
+      <div id="progresso-texto" style="font-size: 0.85rem; color: #5f6368;">Carregando...</div>
       <div class="progress-bar-container">
         <div id="progress-bar" class="progress-bar"></div>
       </div>
@@ -79,26 +96,49 @@
   </div>
 
   <script>
-    // ⚠️ COLE AQUI A URL DA SUA IMPLANTAÇÃO DO GOOGLE APPS SCRIPT
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
+    // ⚠️ COLE AQUI A SUA URL DO GOOGLE APPS SCRIPT
+    const APPS_SCRIPT_URL = "SUA_URL_DO_WEB_APP_AQUI";
 
     let listaHUs = [];
     let html5QrCode;
     let aguardandoProcessamento = false;
 
-    // 1. Busca os dados via API do Apps Script (fetch)
-    async function carregarDados() {
+    // 1. Inicializa carregando dados e configurando o intervalo de 10 segundos
+    async function inicializar() {
+      await carregarDadosSilenciosamente();
+      iniciarCamera();
+      
+      // Sincroniza em segundo plano a cada 10.000ms (10 segundos)
+      setInterval(carregarDadosSilenciosamente, 10000);
+    }
+
+    // 2. Busca atualizações da planilha sem travar a tela
+    async function carregarDadosSilenciosamente() {
+      if (aguardandoProcessamento) return;
+
+      const dot = document.getElementById('sync-dot');
+      const texto = document.getElementById('sync-texto');
+      dot.className = "dot sincronizando";
+
       try {
         const response = await fetch(`${APPS_SCRIPT_URL}?action=obterLista`);
-        listaHUs = await response.json();
-        renderizarLista();
-        iniciarCamera();
+        const novosDados = await response.json();
+
+        // Atualiza a tela apenas se houver mudanças nos dados
+        if (JSON.stringify(novosDados) !== JSON.stringify(listaHUs)) {
+          listaHUs = novosDados;
+          renderizarLista();
+        }
+
+        dot.className = "dot";
+        texto.innerText = "Sincronizado";
       } catch (err) {
-        mostrarFeedback("Erro ao carregar dados do Google Sheets.", false);
+        dot.className = "dot";
+        texto.innerText = "Offline";
       }
     }
 
-    // 2. Renderiza a lista na tela
+    // 3. Desenha a lista de cards
     function renderizarLista() {
       const container = document.getElementById('lista-container');
       container.innerHTML = '';
@@ -132,7 +172,7 @@
       document.getElementById('progress-bar').style.width = `${pct}%`;
     }
 
-    // 3. Ao bipar a HU
+    // 4. Ao ler o código com a câmera
     async function onScanSuccess(decodedText) {
       if (aguardandoProcessamento) return;
 
@@ -153,7 +193,7 @@
 
       aguardandoProcessamento = true;
 
-      // Atualização imediata no frontend (Verde)
+      // Feedback verde instantâneo no aparelho local
       itemExistente.encontrado = true;
       renderizarLista();
       
@@ -162,7 +202,7 @@
 
       mostrarFeedback(`HU ${codigoLido} ENCONTRADA!`, true);
 
-      // Envia atualização para a API do Apps Script
+      // Envia a atualização para o Google Sheets
       try {
         const response = await fetch(`${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(codigoLido)}`);
         const res = await response.json();
@@ -197,7 +237,7 @@
       }
     }
 
-    window.addEventListener('DOMContentLoaded', carregarDados);
+    window.addEventListener('DOMContentLoaded', inicializar);
   </script>
 </body>
 </html>
