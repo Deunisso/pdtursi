@@ -2,7 +2,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+  font-family: 'Segoe UI', -apple-system, Roboto, sans-serif;
 }
 
 html, body {
@@ -13,17 +13,13 @@ html, body {
   color: #fff;
 }
 
-/* Container de Tela Cheia para Modo Paisagem */
 .app-container {
   position: relative;
   width: 100vw;
   height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
 }
 
-/* Câmera ocupando toda a tela */
+/* Câmera em Tela Cheia */
 #video-container {
   position: absolute;
   top: 0;
@@ -40,88 +36,125 @@ video {
   object-fit: cover;
 }
 
-/* HUD FLUTUANTE SUPERIOR (Estilo Homem de Ferro / Sci-Fi) */
+/* 1. CANTO SUPERIOR ESQUERDO: "ESCANEANDO..." COM BORDA ANIMADA */
+#modo-leitura {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #00e676;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 20px;
+  border: 1px solid #00e676;
+  box-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
+  animation: bordaGiratória 2s linear infinite;
+}
+
+@keyframes bordaGiratória {
+  0% { box-shadow: 0 0 5px #00e676, inset 0 0 2px #00e676; }
+  50% { box-shadow: 0 0 15px #00e676, inset 0 0 8px #00e676; }
+  100% { box-shadow: 0 0 5px #00e676, inset 0 0 2px #00e676; }
+}
+
+/* 2. CANTO SUPERIOR DIREITO: QUANTIDADES QUE FALTAM */
+#contador-digitos {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 900;
+  color: #ffd700;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid #ffd700;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+/* 3. EXIBIÇÃO APENAS QUANDO A HU É LIDA */
 .visor-numeros {
   position: absolute;
-  top: 15px;
+  top: 55px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
-  width: auto;
-  min-width: 320px;
-  max-width: 90%;
-  padding: 8px 18px;
-  border-radius: 30px;
-  background: rgba(8, 12, 20, 0.85);
-  border: 1px solid rgba(0, 230, 118, 0.5);
-  box-shadow: 0 0 15px rgba(0, 230, 118, 0.2), 0 4px 20px rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  pointer-events: none;
 }
 
-.visor-topo {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: #00e676;
-  font-weight: 700;
-  letter-spacing: 1px;
-  margin-bottom: 2px;
-}
-
-#modo-leitura {
-  text-transform: uppercase;
-}
-
-#contador-digitos {
-  font-family: monospace;
-}
-
-/* Display de Dígitos */
 .visor-vibe-futurista {
   font-family: 'Courier New', monospace;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 900;
   letter-spacing: 2px;
 }
 
 .nums-estaveis {
   color: #00e676;
-  text-shadow: 0 0 10px rgba(0, 230, 118, 0.8);
+  text-shadow: 0 0 12px rgba(0, 230, 118, 0.9);
+  background: rgba(0, 0, 0, 0.8);
+  padding: 4px 12px;
+  border-radius: 6px;
 }
 
-.nums-piscando {
-  color: #ffd700;
-  text-shadow: 0 0 8px rgba(255, 215, 0, 0.8);
-  animation: pulsarHUD 0.15s ease-in-out infinite alternate;
-}
-
-@keyframes pulsarHUD {
-  0% { opacity: 0.4; }
-  100% { opacity: 1; }
-}
-
-/* Mira Suave Central (Apenas Guia Visual) */
-.mira {
+/* 4. PAINEL DE HUs PENDENTES EMBAIXO */
+#painel-pendentes {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 60%;
-  height: 35%;
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  pointer-events: none;
-  z-index: 5;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 90px;
+  z-index: 20;
+  background: rgba(10, 10, 16, 0.85);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Oculta Elementos Não Utilizados */
+.pendentes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.pendentes-header h3 {
+  font-size: 10px;
+  color: #ff5252;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.lista-hus {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding-bottom: 4px;
+}
+
+.hu-chip {
+  background: rgba(28, 28, 43, 0.9);
+  border: 1px solid #00d2ff;
+  color: #ffd700;
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Oculta os elementos restantes */
 #canvas-processamento,
-#painel-pendentes,
+.mira,
 #dashboard,
 .visor-status,
 .dica-status {
