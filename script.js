@@ -1,28 +1,27 @@
-// ⚠️ COLE AQUI A URL DO SEU GOOGLE APPS SCRIPT
+// ⚠️ URL DO SEU GOOGLE APPS SCRIPT
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
 let listaHUs = [];
 let html5QrCode;
 let aguardandoProcessamento = false;
 
+// Remove parênteses e caracteres não numéricos
 function limparCodigoHU(textoRaw) {
   return String(textoRaw).replace(/[^\d]/g, '').trim();
 }
 
-// Disparado ao clicar no botão "LIGAR CÂMERA"
 async function iniciarAplicacao() {
   document.getElementById('overlay-inicio').style.display = 'none';
 
-  // Verifica se a biblioteca html5-qrcode carregou corretamente
   if (typeof Html5Qrcode === 'undefined') {
-    exibirPainelInferior("❌ ERRO DE CARREGAMENTO", "BIBLIOTECA INDISPONÍVEL", "Recarregue a página. O script da câmera não baixou.", "alerta");
+    exibirPainelInferior("❌ ERRO DE CARREGAMENTO", "BIBLIOTECA INDISPONÍVEL", "Recarregue a página.", "alerta");
     return;
   }
 
   await carregarDadosSilenciosamente();
   iniciarCamera();
 
-  // Sincroniza a contagem a cada 10 segundos
+  // Sincroniza a cada 10 segundos
   setInterval(carregarDadosSilenciosamente, 10000);
 }
 
@@ -36,7 +35,6 @@ async function carregarDadosSilenciosamente() {
   try {
     const urlBusca = `${APPS_SCRIPT_URL}?action=obterLista`;
     const response = await fetch(urlBusca);
-    
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const dados = await response.json();
@@ -44,14 +42,11 @@ async function carregarDadosSilenciosamente() {
       listaHUs = dados;
       atualizarContadores();
       if (dot) dot.className = "dot";
-      if (texto) texto.innerText = "Sincronizado";
-    } else {
-      throw new Error("Formato inválido retornado pelo Apps Script.");
+      if (texto) texto.innerText = "OK";
     }
   } catch (err) {
-    console.error("Erro Apps Script:", err);
     if (dot) dot.className = "dot erro";
-    if (texto) texto.innerText = "Offline (Erro Apps Script)";
+    if (texto) texto.innerText = "Offline";
   }
 }
 
@@ -66,7 +61,7 @@ function atualizarContadores() {
   const elTotal = document.getElementById('qtd-total');
 
   if (elRestante) elRestante.innerText = restantes;
-  if (elTotal) elTotal.innerText = `de ${total} itens pendentes`;
+  if (elTotal) elTotal.innerText = `de ${total} pendentes`;
 }
 
 function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
@@ -83,16 +78,24 @@ function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   const wrapper = document.getElementById('scanner-container');
   if (wrapper) {
     wrapper.classList.add('capturado');
-    setTimeout(() => wrapper.classList.remove('capturado'), 1000);
+    setTimeout(() => wrapper.classList.remove('capturado'), 800);
   }
 }
 
+// Leitura do Código de Barras
 async function onScanSuccess(decodedText) {
   if (aguardandoProcessamento) return;
 
   const codigoLido = limparCodigoHU(decodedText);
 
-  // Busca Inteligente (trata GS1-128 com ou sem prefixo 00)
+  // 🛡️ TRAVA DE SEGURANÇA CONTRA LEITURA PARCIAL:
+  // Se o código lido tiver menos de 18 dígitos, ignora! (Evita leituras cortadas da etiqueta)
+  if (codigoLido.length !== 18 && codigoLido.length !== 20) {
+    console.warn(`Leitura parcial ignorada: ${codigoLido} (${codigoLido.length} dígitos)`);
+    return; // Descarta silenciosamente e continua escaneando até pegar o código inteiro
+  }
+
+  // Busca Inteligente
   const itemExistente = listaHUs.find(i => {
     const huPlanilha = limparCodigoHU(String(i.hu));
     if (huPlanilha === codigoLido) return true;
@@ -101,15 +104,15 @@ async function onScanSuccess(decodedText) {
     return false;
   });
 
-  if (navigator.vibrate) navigator.vibrate(150);
+  if (navigator.vibrate) navigator.vibrate(100);
 
   if (!itemExistente) {
-    exibirPainelInferior("⚠️ CÓDIGO NÃO ENCONTRADO", codigoLido, "Esta HU não pertence a esta lista!", "alerta");
+    exibirPainelInferior("⚠️ NÃO ENCONTRADO", codigoLido, "HU fora da lista de conferência", "alerta");
     return;
   }
 
   if (itemExistente.encontrado) {
-    exibirPainelInferior("⚠️ HU JÁ BIPADA", itemExistente.hu, `Posição: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "alerta");
+    exibirPainelInferior("⚠️ JÁ BIPADA", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "alerta");
     return;
   }
 
@@ -117,61 +120,49 @@ async function onScanSuccess(decodedText) {
   itemExistente.encontrado = true;
   
   atualizarContadores();
-  exibirPainelInferior("⚡ HU BIPADA COM SUCESSO!", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "sucesso");
+  exibirPainelInferior("⚡ HU BIPADA!", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "sucesso");
 
   try {
     const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(itemExistente.hu)}`;
     await fetch(urlBip);
   } catch (err) {
-    console.error("Erro ao gravar no Sheets:", err);
+    console.error("Erro ao gravar:", err);
   } finally {
     aguardandoProcessamento = false;
   }
 }
 
-// Inicia a câmera com tolerância universal a falhas
+// Inicia a câmera focando puramente em CODE_128
 async function iniciarCamera() {
   try {
-    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode = new Html5Qrcode("reader", {
+      formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ] // Foco exclusivo em etiquetas logísticas
+    });
 
     const config = { 
-      fps: 25,
+      fps: 30, // Máxima velocidade de varredura
       disableFlip: false,
       qrbox: function(viewfinderWidth, viewfinderHeight) {
-        const width = Math.floor(viewfinderWidth * 0.85);
-        const height = Math.floor(viewfinderHeight * 0.45);
-        return { width: width, height: height };
-      }
+        // Mira larga e fina, ideal para GS1-128
+        return { 
+          width: Math.floor(viewfinderWidth * 0.90), 
+          height: Math.floor(viewfinderHeight * 0.35) 
+        };
+      },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
     };
 
-    // Tenta iniciar câmera traseira
-    await html5QrCode.start(
-      { facingMode: "environment" }, 
-      config, 
-      onScanSuccess, 
-      () => {}
-    );
+    await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
 
   } catch (err) {
-    console.warn("Tentando fallback de câmera simples...", err);
-    
     try {
-      // Fallback: Busca a lista de câmeras físicas do aparelho e usa a traseira
       const devices = await Html5Qrcode.getCameras();
       if (devices && devices.length > 0) {
         const cameraId = devices[devices.length - 1].id;
-        await html5QrCode.start(cameraId, { fps: 20 }, onScanSuccess, () => {});
-      } else {
-        throw new Error("Nenhuma câmera encontrada.");
+        await html5QrCode.start(cameraId, { fps: 25 }, onScanSuccess, () => {});
       }
     } catch (errFallback) {
-      console.error("Erro crítico na câmera:", errFallback);
-      exibirPainelInferior(
-        "❌ PERMISSÃO NEGADA", 
-        "SEM ACESSO À CÂMERA", 
-        "Permita o uso da câmera nas configurações do navegador do seu celular.", 
-        "alerta"
-      );
+      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Verifique as permissões do navegador.", "alerta");
     }
   }
 }
