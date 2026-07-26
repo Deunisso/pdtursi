@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WMS - Leitor de HU (OCR)</title>
+  <title>WMS - Leitor de HU (OCR Inteligente)</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -11,7 +11,7 @@
     
     .app-container { display: flex; flex-direction: column; height: 100vh; padding: 8px; justify-content: space-between; }
 
-    /* Topo: Painel Slim */
+    /* Topo Slim */
     #dashboard { display: flex; justify-content: space-between; gap: 8px; height: 60px; }
     .card { background: #161622; border-radius: 8px; flex: 1; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 3px solid #333; }
     .card.found { border-color: #00e676; }
@@ -25,20 +25,20 @@
     #video-container { position: relative; flex: 1; margin: 8px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2a2a3a; background: #000; display: flex; align-items: center; justify-content: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
 
-    /* MIRA COM LEITURA DENTRO DO VISOR */
-    .mira { position: absolute; top: 28%; left: 5%; width: 90%; height: 44%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); border-radius: 8px; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; transition: all 0.25s ease; }
+    /* MIRA ADAPTATIVA (Espaço suficiente para pegar o WMS + SSCC) */
+    .mira { position: absolute; top: 30%; left: 4%; width: 92%; height: 35%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); border-radius: 8px; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 8px 12px; transition: all 0.2s ease; }
     .mira.lendo { border-color: #ffd700; }
-    .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.15); box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 25px #00e676; }
+    .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.15); box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 20px #00e676; }
 
-    /* Textos DENTRO do Visor */
-    .visor-topo { display: flex; justify-content: space-between; font-size: 11px; color: #00d2ff; font-weight: bold; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
-    .visor-numeros { font-family: 'Courier New', monospace; font-size: 20px; font-weight: 900; color: #00e676; text-align: center; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.9); background: rgba(0,0,0,0.75); padding: 8px; border-radius: 6px; word-break: break-all; margin: auto 0; }
-    .visor-status { font-size: 11px; color: #ffd700; text-align: center; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,0.9); background: rgba(0,0,0,0.6); padding: 4px; border-radius: 4px; }
+    /* Visor Interno */
+    .visor-topo { display: flex; justify-content: space-between; font-size: 10px; color: #00d2ff; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.9); }
+    .visor-numeros { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 900; color: #00e676; text-align: center; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.9); background: rgba(0,0,0,0.8); padding: 6px; border-radius: 4px; word-break: break-all; margin: auto 0; }
+    .visor-status { font-size: 10px; color: #ffd700; text-align: center; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.9); background: rgba(0,0,0,0.6); padding: 3px; border-radius: 4px; }
 
-    /* NOTIFICAÇÃO DISCRETA NO TOPO (Substitui o overlay verde) */
+    /* Notificação Discreta */
     #notificacao-discreta { display: none; position: absolute; top: 12px; left: 5%; width: 90%; background: #12121a; border: 2px solid #00e676; border-radius: 8px; padding: 10px 15px; z-index: 100; box-shadow: 0 4px 15px rgba(0,230,118,0.4); text-align: left; animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-    #notificacao-discreta .titulo { font-size: 12px; color: #00e676; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-    #notificacao-discreta .hu-codigo { font-family: monospace; font-size: 18px; color: #fff; font-weight: bold; margin-top: 2px; letter-spacing: 1.5px; }
+    #notificacao-discreta .titulo { font-size: 11px; color: #00e676; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+    #notificacao-discreta .hu-codigo { font-family: monospace; font-size: 17px; color: #fff; font-weight: bold; margin-top: 2px; letter-spacing: 1.5px; }
 
     @keyframes slideDown { from { transform: translateY(-30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
@@ -60,7 +60,7 @@
       </div>
     </div>
 
-    <!-- Câmera com Visor Interno e Notificação Discreta -->
+    <!-- Câmera com Detecção Inteligente -->
     <div id="video-container">
       <video id="webcam" autoplay playsinline></video>
       
@@ -70,10 +70,10 @@
         <div id="hu-notificacao-texto" class="hu-codigo">000000000000000000</div>
       </div>
 
-      <!-- Mira com Visor HUD -->
+      <!-- Mira Adaptativa -->
       <div id="mira-box" class="mira">
         <div class="visor-topo">
-          <span>PADRÃO HU (18 DÍGITOS)</span>
+          <span id="modo-leitura">MODO: ÂNCORA WMS + DÍGITOS</span>
           <span id="contador-digitos">0 / 18</span>
         </div>
         <div id="numeros-lidos" class="visor-numeros">Aguardando...</div>
@@ -87,7 +87,7 @@
   <script>
     // =================================================================
     // ⚠️ COLOQUE AQUI A SUA URL DO GOOGLE APPS SCRIPT:
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
+    const SCRIPT_URL = "SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
     // =================================================================
 
     const video = document.getElementById('webcam');
@@ -95,6 +95,7 @@
     const numerosLidosEl = document.getElementById('numeros-lidos');
     const contadorDigitosEl = document.getElementById('contador-digitos');
     const dicaStatusEl = document.getElementById('dica-status');
+    const modoLeituraEl = document.getElementById('modo-leitura');
     const notificacaoEl = document.getElementById('notificacao-discreta');
     const huNotificacaoTexto = document.getElementById('hu-notificacao-texto');
     const canvas = document.getElementById('canvas-processamento');
@@ -103,7 +104,6 @@
     let processandoHU = false;
     let workerOCR = null;
 
-    // Bip Sonoro
     function tocarBip() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -121,7 +121,6 @@
       } catch(e) {}
     }
 
-    // Dashboard
     async function atualizarDashboard() {
       try {
         const res = await fetch(SCRIPT_URL);
@@ -131,7 +130,6 @@
       } catch (e) {}
     }
 
-    // Inicializar Câmera
     navigator.mediaDevices.getUserMedia({ 
       video: { 
         facingMode: "environment", 
@@ -150,26 +148,25 @@
     });
 
     async function iniciarOCR() {
-      dicaStatusEl.innerText = "⚡ Carregando Filtros de Leitura...";
+      dicaStatusEl.innerText = "⚡ Carregando Reconhecimento Visual...";
       
       workerOCR = await Tesseract.createWorker('eng');
       
-      // Restrição estrita de caracteres numéricos
+      // Aceita números e a palavra WMS
       await workerOCR.setParameters({
-        tessedit_char_whitelist: '0123456789',
+        tessedit_char_whitelist: '0123456789WMSwms',
       });
 
-      dicaStatusEl.innerText = "🟢 Alinhe os 18 dígitos na mira horizontal";
+      dicaStatusEl.innerText = "🟢 Enquadre a palavra WMS ou o número na mira";
       dicaStatusEl.style.color = "#00e676";
       ocrAtivo = true;
 
       loopOCR();
     }
 
-    // Loop com validação de Geometria Horizontal + Certeza Mínima
     async function loopOCR() {
       if (!ocrAtivo || processandoHU) {
-        setTimeout(loopOCR, 250);
+        setTimeout(loopOCR, 200);
         return;
       }
 
@@ -180,79 +177,78 @@
         const vh = video.videoHeight;
         
         if (vw > 0 && vh > 0) {
-          canvas.width = vw * 0.9;
-          canvas.height = vh * 0.44;
+          // Crop focado na área central (30% a 65% da tela)
+          canvas.width = vw * 0.92;
+          canvas.height = vh * 0.35;
           const ctx = canvas.getContext('2d');
           
-          ctx.drawImage(video, vw * 0.05, vh * 0.28, vw * 0.9, vh * 0.44, 0, 0, canvas.width, canvas.height);
-
-          // TRATAMENTO DE IMAGEM SEVERO (Remove ruídos de fundo de longe)
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imgData.data;
-          for (let i = 0; i < data.length; i += 4) {
-            let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-            // Limiar alto: só mantém pretos fortes (caracteres do SSCC)
-            avg = avg < 110 ? 0 : 255;
-            data[i] = avg;
-            data[i + 1] = avg;
-            data[i + 2] = avg;
-          }
-          ctx.putImageData(imgData, 0, 0);
+          ctx.drawImage(video, vw * 0.04, vh * 0.30, vw * 0.92, vh * 0.35, 0, 0, canvas.width, canvas.height);
 
           const result = await workerOCR.recognize(canvas);
-          const symbols = result.data.symbols || [];
-          
-          // FILTRO GEOMÉTRICO: Seleciona apenas símbolos com boa confiança (>75%)
-          const simbolosValidos = symbols.filter(s => s.confidence >= 75 && /\d/.test(s.text));
-          
-          // Agrupa caracteres por linha (tolerância de Y <= 15px) para garantir leitura lado a lado
-          const linhas = {};
-          simbolosValidos.forEach(s => {
-            const yCentro = Math.round(s.bbox.y0 / 15) * 15;
-            if (!linhas[yCentro]) linhas[yCentro] = [];
-            linhas[yCentro].push(s);
-          });
+          const words = result.data.words || [];
+
+          // 🔍 OPÇÃO 1: Procura a palavra "WMS"
+          const wmsWord = words.find(w => /WMS/i.test(w.text));
 
           let huEncontrada = null;
-          let melhorParcial = "";
+          let metodoUsado = "";
 
-          // Analisa cada linha horizontal encontrada
-          for (const key in linhas) {
-            // Ordena os números da linha da esquerda para a direita (X)
-            const linhaOrdenada = linhas[key].sort((a, b) => a.bbox.x0 - b.bbox.x0);
-            const textoLinha = linhaOrdenada.map(s => s.text).join('');
+          if (wmsWord) {
+            // Se achou WMS, pega a posição Y de onde o WMS termina
+            const wmsYFim = wmsWord.bbox.y1;
 
-            if (textoLinha.length > melhorParcial.length) {
-              melhorParcial = textoLinha;
-            }
+            // Filtra apenas os números que estão localizados ABAIXO da palavra WMS
+            const palavrasAbaixoDoWMS = words.filter(w => w.bbox.y0 >= (wmsYFim - 5));
+            const textoAbaixo = palavrasAbaixoDoWMS.map(w => w.text).join('').replace(/\D/g, '');
 
-            // Procura o padrão SSCC exato de 18 dígitos na linha horizontal
-            const match = textoLinha.match(/1789\d{14}/) || textoLinha.match(/\d{18}/);
-            if (match) {
-              huEncontrada = match[0];
-              break;
+            const matchWMS = textoAbaixo.match(/1789\d{14}/) || textoAbaixo.match(/1\d{17}/);
+            if (matchWMS) {
+              huEncontrada = matchWMS[0];
+              metodoUsado = "📍 ÂNCORA WMS DETECTADA";
             }
           }
 
+          // 🔍 OPÇÃO 2 (FALLBACK): Se não achou WMS ou não achou o código abaixo dele, varre a imagem inteira da mira
+          if (!huEncontrada) {
+            const todoTextoLimpo = result.data.text.replace(/\D/g, '');
+            const matchFallback = todoTextoLimpo.match(/1789\d{14}/) || todoTextoLimpo.match(/1\d{17}/);
+            if (matchFallback) {
+              huEncontrada = matchFallback[0];
+              metodoUsado = "🔍 LEITURA DIRETA SSCC";
+            }
+          }
+
+          // RESULTADO DA LEITURA
           if (huEncontrada) {
             numerosLidosEl.innerText = huEncontrada;
             contadorDigitosEl.innerText = "18 / 18";
-            dicaStatusEl.innerText = "🎯 Leitura Alinhada Detectada!";
+            modoLeituraEl.innerText = metodoUsado;
+            dicaStatusEl.innerText = "🎯 SSCC Confirmado!";
             dicaStatusEl.style.color = "#00e676";
             
             miraBox.classList.remove('lendo');
             miraBox.classList.add('sucesso');
             
             await verificarHU(huEncontrada);
-          } else if (melhorParcial.length > 0) {
-            const parcialExibida = melhorParcial.substring(0, 18);
-            numerosLidosEl.innerText = parcialExibida;
-            contadorDigitosEl.innerText = `${parcialExibida.length} / 18`;
-            dicaStatusEl.innerText = "👁️ Alinhando dígitos horizontais...";
-            dicaStatusEl.style.color = "#ffd700";
           } else {
-            numerosLidosEl.innerText = "Aguardando...";
-            contadorDigitosEl.innerText = "0 / 18";
+            // Exibe a parcial caso esteja montando os dígitos
+            const textoGeral = result.data.text.replace(/\D/g, '');
+            if (textoGeral.length > 0) {
+              const parcial = textoGeral.substring(0, 18);
+              numerosLidosEl.innerText = parcial;
+              contadorDigitosEl.innerText = `${parcial.length} / 18`;
+              
+              if (wmsWord) {
+                dicaStatusEl.innerText = "📍 WMS localizado! Buscando número abaixo...";
+                dicaStatusEl.style.color = "#00d2ff";
+              } else {
+                dicaStatusEl.innerText = "👁️ Buscando WMS ou 18 dígitos...";
+                dicaStatusEl.style.color = "#ffd700";
+              }
+            } else {
+              numerosLidosEl.innerText = "Aguardando...";
+              contadorDigitosEl.innerText = "0 / 18";
+            }
           }
         }
         miraBox.classList.remove('lendo');
@@ -263,7 +259,6 @@
       setTimeout(loopOCR, 200);
     }
 
-    // Enviar para a planilha e exibir alerta discreto
     async function verificarHU(hu) {
       processandoHU = true;
       try {
@@ -276,7 +271,6 @@
         if (data.status === "sucesso") {
           tocarBip();
           
-          // NOTIFICAÇÃO DISCRETA NO TOPO
           huNotificacaoTexto.innerText = hu;
           notificacaoEl.style.display = 'block';
           
@@ -286,7 +280,7 @@
             notificacaoEl.style.display = 'none';
             resetarVisor();
             processandoHU = false;
-          }, 2800);
+          }, 2500);
 
         } else if (data.status === "ja_lido") {
           dicaStatusEl.innerText = `⚠️ HU ${hu} JÁ FOI LIDA!`;
@@ -308,7 +302,8 @@
       miraBox.classList.remove('sucesso');
       numerosLidosEl.innerText = "Aguardando...";
       contadorDigitosEl.innerText = "0 / 18";
-      dicaStatusEl.innerText = "🟢 Alinhe os 18 dígitos na mira horizontal";
+      modoLeituraEl.innerText = "MODO: ÂNCORA WMS + DÍGITOS";
+      dicaStatusEl.innerText = "🟢 Enquadre a palavra WMS ou o número na mira";
       dicaStatusEl.style.color = "#00e676";
     }
 
