@@ -18,15 +18,33 @@ const containerListaHus = document.getElementById('container-lista-hus');
 const badgeContador = document.getElementById('badge-contador');
 const canvas = document.getElementById('canvas-processamento');
 
+// Canvas Overlay para desenhar os contornos dinâmicos sobre o vídeo
+let canvasOverlay = document.getElementById('canvas-overlay');
+if (!canvasOverlay) {
+  canvasOverlay = document.createElement('canvas');
+  canvasOverlay.id = 'canvas-overlay';
+  canvasOverlay.style.position = 'absolute';
+  canvasOverlay.style.top = '0';
+  canvasOverlay.style.left = '0';
+  canvasOverlay.style.width = '100%';
+  canvasOverlay.style.height = '100%';
+  canvasOverlay.style.pointerEvents = 'none';
+  video.parentElement.appendChild(canvasOverlay);
+}
+
 // Controle Global
 let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
 let detectorBarra = null;
 let lanternaLigada = false;
-let listaPendentesGlobal = [];
 
-// 🔔 Som de Bip Feedback
+// Helper: Extrai estritamente caracteres numéricos
+function extrairNumeros(str) {
+  return String(str || '').replace(/[^\d]/g, '').trim();
+}
+
+// 🔔 Som de Bip
 function tocarBip() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -44,151 +62,71 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// 🔦 Lanterna
-async function alternarLanterna() {
-  const stream = video.srcObject;
-  if (!stream) return;
-  const track = stream.getVideoTracks()[0];
-  if (!track) return;
-
-  try {
-    lanternaLigada = !lanternaLigada;
-    await track.applyConstraints({ advanced: [{ torch: lanternaLigada }] });
-    if (btnLanterna) btnLanterna.classList.toggle('ativo', lanternaLigada);
-  } catch (e) {
-    alert("Lanterna não suportada neste dispositivo.");
-  }
-}
-
-// Helper: Extrai estritamente caracteres numéricos (0-9)
-function extrairNumeros(str) {
-  return String(str || '').replace(/[^\d]/g, '').trim();
-}
-
-// 📊 Dashboard / Integração com Planilha
-async function atualizarDashboard() {
-  try {
-    const res = await fetch(SCRIPT_URL);
-    const data = await res.json();
-    
-    if (document.getElementById('qtd-encontradas')) {
-      document.getElementById('qtd-encontradas').innerText = data.encontradas || 0;
-    }
-    if (document.getElementById('qtd-faltam')) {
-      document.getElementById('qtd-faltam').innerText = data.pendentes || 0;
-    }
-
-    if (data.lista_pendentes && Array.isArray(data.lista_pendentes)) {
-      renderizarListaPendentes(data.lista_pendentes);
-    }
-  } catch (e) {
-    console.error("Erro no dashboard:", e);
-  }
-}
-
-function renderizarListaPendentes(lista) {
-  listaPendentesGlobal = lista.map(item => extrairNumeros(item)).filter(item => item.length > 0);
-  if (badgeContador) badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
-
-  if (listaPendentesGlobal.length === 0) {
-    containerListaHus.innerHTML = `<div class="lista-vazia">🎉 Todas as HUs lidas!</div>`;
-    return;
-  }
-
-  containerListaHus.innerHTML = listaPendentesGlobal.map(huCompleta => {
-    const ultimos5 = huCompleta.length >= 5 ? huCompleta.slice(-5) : huCompleta;
-    return `<div class="hu-chip" data-hu="${huCompleta}"><span>…${ultimos5}</span></div>`;
-  }).join('');
-}
-
-function removerHuDaListaVisual(huEncontrada) {
-  const huLimpa = extrairNumeros(huEncontrada);
-  const ultimos5 = huLimpa.slice(-5);
-  const chips = containerListaHus.querySelectorAll('.hu-chip');
-  
-  chips.forEach(chip => {
-    const huAtributo = chip.getAttribute('data-hu');
-    if (huAtributo === huLimpa || (huAtributo && huAtributo.endsWith(ultimos5))) {
-      chip.classList.add('removendo');
-      setTimeout(() => {
-        chip.remove();
-        listaPendentesGlobal = listaPendentesGlobal.filter(item => item !== huAtributo && !item.endsWith(ultimos5));
-        if (badgeContador) badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
-      }, 300);
-    }
-  });
-}
-
-// 📷 Inicialização da Câmera HD
+// 📷 Inicialização Câmera HD
 navigator.mediaDevices.getUserMedia({ 
-  video: { 
-    facingMode: "environment", 
-    width: { ideal: 1920, min: 1280 }, 
-    height: { ideal: 1080, min: 720 }
-  } 
+  video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
 .then(stream => {
   video.srcObject = stream;
   iniciarSistemaLeitura();
 })
-.catch(err => {
+.catch(() => {
   dicaStatusEl.innerText = "❌ Permita o acesso à câmera.";
-  dicaStatusEl.style.color = "#ff5252";
 });
 
-// 🚀 Inicialização Dupla: Barcode Detector + OCR em Modo Bloco Tolerante (PSM 6)
+// 🚀 Inicialização com Suporte a Letras e Números (Modo Leitura Completa)
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Inicializando leitor otimizado...";
+  dicaStatusEl.innerText = "⚡ Inicializando leitor com Ancoragem WMS...";
 
-  // 1. Ativa BarcodeDetector Nativo
   if ('BarcodeDetector' in window) {
     try {
-      detectorBarra = new BarcodeDetector({
-        formats: ['code_128', 'code_39', 'ean_13', 'upc_a', 'data_matrix', 'qr_code']
-      });
-    } catch (e) {
-      console.warn("BarcodeDetector não suportado.", e);
-    }
+      detectorBarra = new BarcodeDetector({ formats: ['code_128', 'ea_13', 'data_matrix', 'qr_code'] });
+    } catch (e) {}
   }
 
-  // 2. OCR Tesseract com PSM 6 (Permite pequena inclinação e margem de enquadramento)
+  // Tesseract configurado para ler letras (WMS) e dígitos numéricos
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789', // Whitelist estrita (Apenas números)
-    tessedit_pageseg_mode: '6',           // PSM 6: Trata como bloco de texto flexível
+    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+    tessedit_pageseg_mode: '11', // PSM 11: Encontra o máximo de texto espalhado para detectar a âncora "WMS"
   });
 
-  dicaStatusEl.innerText = "🟢 Aponta para o SSCC ou Código de Barras";
+  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta (Buscando WMS)";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// 🎨 Tratamento da Imagem: Upscaling (2x) + Binarização Adaptativa
-function processarImagemDensa(ctx, cropX, cropY, cropW, cropH) {
-  canvas.width = cropW * 2;
-  canvas.height = cropH * 2;
+// 🎨 Limpa/Desenha o Contorno em volta do texto detectado na tela
+function desenharContornoNaTela(bbox, videoWidth, videoHeight, cor = "#00e676") {
+  const ctx = canvasOverlay.getContext('2d');
+  canvasOverlay.width = video.clientWidth;
+  canvasOverlay.height = video.clientHeight;
 
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
 
-  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const d = imgData.data;
+  if (!bbox) return;
 
-  // Binarização Adaptativa
-  for (let i = 0; i < d.length; i += 4) {
-    const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    const v = gray < 130 ? 0 : 255; 
-    d[i] = v;
-    d[i + 1] = v;
-    d[i + 2] = v;
-  }
+  const scaleX = canvasOverlay.width / videoWidth;
+  const scaleY = canvasOverlay.height / videoHeight;
 
-  ctx.putImageData(imgData, 0, 0);
+  const x = bbox.x0 * scaleX;
+  const y = bbox.y0 * scaleY;
+  const w = (bbox.x1 - bbox.x0) * scaleX;
+  const h = (bbox.y1 - bbox.y0) * scaleY;
+
+  // Desenha caixa de destaque
+  ctx.strokeStyle = cor;
+  ctx.lineWidth = 4;
+  ctx.strokeRect(x, y, w, h);
+
+  // Preenchimento translúcido
+  ctx.fillStyle = cor === "#00e676" ? "rgba(0, 230, 118, 0.2)" : "rgba(255, 215, 0, 0.2)";
+  ctx.fillRect(x, y, w, h);
 }
 
-// 🔍 LOOP DE LEITURA HÍBRIDO E EXPANDIDO
+// 🔍 LOOP DE LEITURA COM ANCORAGEM PELO "WMS"
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 80);
@@ -196,126 +134,95 @@ async function loopLeituraOCR() {
   }
 
   try {
-    miraBox.classList.add('lendo');
-    
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    
+
     if (vw > 0 && vh > 0) {
 
-      // 📌 CAMADA 1: DETECÇÃO DE CÓDIGO DE BARRAS (Visão Global)
-      if (detectorBarra) {
-        try {
-          const codigos = await detectorBarra.detect(video);
-          for (const codigo of codigos) {
-            const numerosBarra = extrairNumeros(codigo.rawValue);
-            const matchBarra = numerosBarra.match(/1789\d{14}/);
-
-            if (matchBarra && !processandoHU) {
-              const huEncontrada = matchBarra[0];
-              processandoHU = true;
-
-              modoLeituraEl.innerText = "⚡ BARCODE LIDO COM SUCESSO!";
-              spanNumsEstabilizados.innerText = huEncontrada;
-              spanNumsAtivos.innerText = "";
-              contadorDigitosEl.innerText = "18 / 18";
-
-              dicaStatusEl.innerText = "✓ CÓDIGO DE BARRAS CAPTURADO!";
-              dicaStatusEl.style.color = "#00e676";
-
-              miraBox.classList.remove('lendo');
-              miraBox.classList.add('sucesso');
-
-              await verificarHU(huEncontrada);
-              return;
-            }
-          }
-        } catch (eBarra) {
-          // Segue para a camada do OCR se o barcode não detectar nada neste frame
-        }
-      }
-
-      // 📌 CAMADA 2: OCR COM MARGEM AMPLIADA NO SSCC (TEXTO)
-      // Caixa estendida para garantir a captura do texto mesmo em movimento
-      const CROP_W = vw * 0.65;  
-      const CROP_H = vh * 0.22;  
-      const CROP_X = vw * 0.05;  
-      const CROP_Y = vh * 0.18;  
-
+      // Preparação do Canvas para OCR Total
+      canvas.width = vw;
+      canvas.height = vh;
       const ctx = canvas.getContext('2d');
-      processarImagemDensa(ctx, CROP_X, CROP_Y, CROP_W, CROP_H);
+      ctx.drawImage(video, 0, 0, vw, vh);
 
-      // Leitura OCR
+      // OCR da tela inteira
       const result = await workerOCR.recognize(canvas);
-      const numerosPuros = extrairNumeros(result.data.text);
+      const words = result.data.words || [];
 
-      // Filtro de Validação: Prefixo 1789 + 14 dígitos
-      const matchOCR = numerosPuros.match(/1789\d{14}/);
+      // 1. TENTA ENCONTRAR A ÂNCORA "WMS"
+      const anchorWMS = words.find(w => w.text.toUpperCase().includes("WMS"));
 
-      if (matchOCR && !processandoHU) {
-        const huEncontrada = matchOCR[0];
+      if (anchorWMS) {
+        modoLeituraEl.innerText = "📍 ETIQUETA WMS LOCALIZADA!";
+        dicaStatusEl.innerText = "👁️ Lendo linha do SSCC...";
+        dicaStatusEl.style.color = "#ffd700";
 
-        if (huEncontrada.length === 18) {
+        // Desenha contorno amarelo sobre a palavra WMS encontrada
+        desenharContornoNaTela(anchorWMS.bbox, vw, vh, "#ffd700");
+
+        // 2. BUSCA O CÓDIGO 1789... DENTRO DAS PALAVRAS/LINHAS ABAIXO DO WMS
+        const matchSSCC = words.find(w => {
+          const numPuro = extrairNumeros(w.text);
+          return numPuro.match(/1789\d{14}/);
+        });
+
+        if (matchSSCC && !processandoHU) {
+          const numerosPuros = extrairNumeros(matchSSCC.text);
+          const huEncontrada = numerosPuros.match(/1789\d{14}/)[0];
+
           processandoHU = true;
+
+          // Desenha caixa VERDE no SSCC lido
+          desenharContornoNaTela(matchSSCC.bbox, vw, vh, "#00e676");
 
           modoLeituraEl.innerText = "🔒 HU TEXTO LIDA COM SUCESSO!";
           spanNumsEstabilizados.innerText = huEncontrada;
           spanNumsAtivos.innerText = "";
           contadorDigitosEl.innerText = "18 / 18";
 
-          dicaStatusEl.innerText = "✓ LEITURA TEXTUAL CONCLUÍDA!";
+          dicaStatusEl.innerText = "✓ LEITURA ANCORADA CONCLUÍDA!";
           dicaStatusEl.style.color = "#00e676";
-
-          miraBox.classList.remove('lendo');
-          miraBox.classList.add('sucesso');
 
           await verificarHU(huEncontrada);
           return;
         }
       } else {
-        const pos1789 = numerosPuros.indexOf('1789');
+        // Se não achou a palavra WMS explícita, tenta busca direta por expressão regular global
+        const textGlobal = result.data.text || "";
+        const numerosPuros = extrairNumeros(textGlobal);
+        const matchGlobal = numerosPuros.match(/1789\d{14}/);
 
-        if (pos1789 !== -1) {
-          const parcial = numerosPuros.substring(pos1789, pos1789 + 18);
-          const faltam = 18 - parcial.length;
+        if (matchGlobal && !processandoHU) {
+          const huEncontrada = matchGlobal[0];
+          processandoHU = true;
 
-          spanNumsEstabilizados.innerText = parcial;
-          spanNumsAtivos.innerText = "?".repeat(Math.max(0, faltam));
-          contadorDigitosEl.innerText = `${parcial.length} / 18`;
+          modoLeituraEl.innerText = "🔒 HU TEXTO LIDA!";
+          spanNumsEstabilizados.innerText = huEncontrada;
+          contadorDigitosEl.innerText = "18 / 18";
 
-          modoLeituraEl.innerText = "FOCANDO NO 1789...";
-          dicaStatusEl.innerText = "👁️ Segure firme...";
-          dicaStatusEl.style.color = "#ffd700";
+          await verificarHU(huEncontrada);
+          return;
         } else {
-          spanNumsEstabilizados.innerText = "";
-          spanNumsAtivos.innerText = "1789????????????";
-          contadorDigitosEl.innerText = "0 / 18";
-
-          modoLeituraEl.innerText = "PROCURANDO ETIQUETA...";
-          dicaStatusEl.innerText = "🟢 Aponta para a etiqueta";
+          desenharContornoNaTela(null); // Limpa os retângulos se não houver leitura
+          modoLeituraEl.innerText = "BUSCANDO WMS...";
+          dicaStatusEl.innerText = "🟢 Enquadre o topo da etiqueta (WMS)";
           dicaStatusEl.style.color = "#00e676";
         }
       }
     }
   } catch (e) {
-    console.error("Erro no processamento:", e);
+    console.error("Erro no loop OCR:", e);
   } finally {
-    miraBox.classList.remove('lendo');
     if (!processandoHU) {
-      setTimeout(loopLeituraOCR, 80);
+      setTimeout(loopLeituraOCR, 100);
     }
   }
 }
 
-// 📡 Comunicação com a Planilha (Google Apps Script)
+// 📡 Envio para Planilha
 async function verificarHU(huCompleta) {
-  // Watchdog de Segurança: destrava em 5s se o Apps Script demorar
   const timerSeguranca = setTimeout(() => {
-    if (processandoHU) {
-      dicaStatusEl.innerText = "⚠️ Servidor lento. Reiniciando leitor...";
-      dicaStatusEl.style.color = "#ff9800";
-      setTimeout(resetarVisor, 1200);
-    }
+    if (processandoHU) resetarVisor();
   }, 5000);
 
   try {
@@ -328,56 +235,28 @@ async function verificarHU(huCompleta) {
 
     if (data.status === "sucesso") {
       tocarBip();
-      
-      const ultimos5 = huCompleta.slice(-5);
-      huNotificacaoTexto.innerText = `...${ultimos5} (${huCompleta})`;
-      notificacaoEl.style.display = 'block';
-      
-      removerHuDaListaVisual(huCompleta);
-
-      setTimeout(() => {
-        notificacaoEl.style.display = 'none';
-        resetarVisor();
-      }, 1400);
-
-    } else if (data.status === "ja_lido") {
-      dicaStatusEl.innerText = `⚠️ HU ${huCompleta.slice(-5)} já foi lida!`;
-      dicaStatusEl.style.color = "#ff9800";
       setTimeout(resetarVisor, 1400);
     } else {
-      dicaStatusEl.innerText = `❌ HU ${huCompleta.slice(-5)} não está na lista!`;
-      dicaStatusEl.style.color = "#ff5252";
       setTimeout(resetarVisor, 1400);
     }
   } catch (e) {
     clearTimeout(timerSeguranca);
-    dicaStatusEl.innerText = "❌ Erro de conexão com a Planilha.";
-    dicaStatusEl.style.color = "#ff5252";
     setTimeout(resetarVisor, 1400);
   }
 }
 
-// 🔄 Reset do Visor e Liberação do Loop
+// 🔄 Reset do Estado
 function resetarVisor() {
-  miraBox.classList.remove('sucesso', 'lendo');
-  
+  desenharContornoNaTela(null);
   spanNumsEstabilizados.innerText = "";
   spanNumsAtivos.innerText = "1789????????????";
-  
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "PROCURANDO ETIQUETA...";
-  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta";
+  dicaStatusEl.innerText = "🟢 Enquadre a etiqueta WMS";
   dicaStatusEl.style.color = "#00e676";
-  
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   processandoHU = false;
   ocrAtivo = true;
 
   setTimeout(loopLeituraOCR, 100);
 }
-
-// 🚀 Start das Requisições do Dashboard
-atualizarDashboard();
-setInterval(atualizarDashboard, 5000);
