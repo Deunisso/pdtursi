@@ -1,1 +1,236 @@
+* { 
+  box-sizing: border-box; 
+  margin: 0; 
+  padding: 0; 
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+}
 
+body { 
+  background-color: #f4f6f9; 
+  padding: 15px; 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  min-height: 100vh; 
+}
+
+.container { 
+  width: 100%; 
+  max-width: 500px; 
+}
+
+.header-panel { 
+  background: #ffffff; 
+  padding: 15px; 
+  border-radius: 12px; 
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08); 
+  margin-bottom: 15px; 
+  text-align: center; 
+  position: relative; 
+}
+
+.header-panel h2 { 
+  font-size: 1.1rem; 
+  color: #1a73e8; 
+  margin-bottom: 5px; 
+}
+
+.sync-status { 
+  position: absolute; 
+  top: 12px; 
+  right: 15px; 
+  font-size: 0.75rem; 
+  color: #5f6368; 
+  display: flex; 
+  align-items: center; 
+  gap: 4px; 
+}
+
+.dot { 
+  width: 8px; 
+  height: 8px; 
+  border-radius: 50%; 
+  background: #34a853; 
+  display: inline-block; 
+}
+
+.dot.sincronizando { 
+  background: #fbbc04; 
+  animation: pulse 1s infinite; 
+}
+
+.dot.erro { 
+  background: #ea4335; 
+}
+
+.progress-bar-container { 
+  background: #e0e0e0; 
+  height: 10px; 
+  border-radius: 5px; 
+  overflow: hidden; 
+  margin-top: 10px; 
+}
+
+.progress-bar { 
+  background: #34a853; 
+  height: 100%; 
+  width: 0%; 
+  transition: width 0.4s ease; 
+}
+
+/* VISUAL DA CÂMERA: TARJA COMPACTA COM LASER */
+.scanner-wrapper {
+  position: relative;
+  width: 100%;
+  height: 150px; /* Altura reduzida em formato tarja */
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  border: 2px solid #34a853;
+  margin-bottom: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.scanner-wrapper.capturado {
+  border-color: #00ff66;
+  box-shadow: 0 0 20px #00ff66;
+}
+
+#reader { 
+  width: 100%; 
+  height: 100%; 
+}
+
+#reader video {
+  width: 100% !important;
+  height: 150px !important;
+  object-fit: cover !important;
+}
+
+/* Linha Laser Animada */
+.laser-line {
+  position: absolute;
+  top: 0;
+  left: 5%;
+  width: 90%;
+  height: 2px;
+  background: #ff0000;
+  box-shadow: 0 0 8px #ff0000, 0 0 12px #ff0000;
+  animation: varredura 2s infinite ease-in-out;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.scanner-wrapper.capturado .laser-line {
+  background: #00ff66;
+  box-shadow: 0 0 10px #00ff66, 0 0 20px #00ff66;
+}
+
+/* Miras nos Cantos */
+.mira {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: #ffffff;
+  border-style: solid;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.8;
+}
+
+.top-left { top: 15px; left: 15px; border-width: 3px 0 0 3px; }
+.top-right { top: 15px; right: 15px; border-width: 3px 3px 0 0; }
+.bottom-left { bottom: 15px; left: 15px; border-width: 0 0 3px 3px; }
+.bottom-right { bottom: 15px; right: 15px; border-width: 0 3px 3px 0; }
+
+.scanner-status {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 3px 10px;
+  border-radius: 10px;
+  z-index: 10;
+  letter-spacing: 0.5px;
+  pointer-events: none;
+}
+
+#feedback { 
+  padding: 10px 15px; 
+  border-radius: 8px; 
+  font-weight: bold; 
+  font-size: 0.9rem; 
+  text-align: center; 
+  margin-bottom: 15px; 
+  display: none; 
+}
+
+#feedback.sucesso { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+#feedback.erro { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+.list-title { 
+  font-size: 0.9rem; 
+  font-weight: bold; 
+  color: #5f6368; 
+  margin-top: 15px; 
+  margin-bottom: 10px; 
+  text-transform: uppercase; 
+}
+
+.lista-hus { display: flex; flex-direction: column; gap: 10px; }
+
+.hu-card { 
+  background: #ffffff; 
+  border: 2px solid #e0e0e0; 
+  border-radius: 10px; 
+  padding: 12px 15px; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  transition: all 0.3s ease; 
+}
+
+.hu-info { display: flex; flex-direction: column; gap: 3px; }
+.hu-codigo { font-weight: bold; font-size: 1rem; color: #202124; }
+.hu-detalhe { font-size: 0.82rem; color: #5f6368; }
+.badge { font-size: 0.75rem; font-weight: bold; padding: 5px 10px; border-radius: 20px; background: #e8eaed; color: #5f6368; }
+
+.hu-card.encontrado { background-color: #e6f4ea; border-color: #34a853; }
+.hu-card.encontrado .hu-codigo { color: #137333; }
+.hu-card.encontrado .badge { background-color: #34a853; color: #ffffff; }
+
+#painel-logs { 
+  margin-top: 25px; 
+  background: #1e1e1e; 
+  color: #00ff66; 
+  border-radius: 8px; 
+  padding: 10px; 
+  font-family: monospace; 
+  font-size: 0.75rem; 
+  max-height: 180px; 
+  overflow-y: auto; 
+  width: 100%; 
+  border: 1px solid #333; 
+}
+
+.log-entry { margin-bottom: 5px; border-bottom: 1px solid #2a2a2a; padding-bottom: 3px; word-break: break-all; }
+.log-time { color: #888; font-size: 0.7rem; }
+.log-erro { color: #ff5555; font-weight: bold; }
+.log-aviso { color: #ffaa00; }
+.log-info { color: #00ddff; }
+
+@keyframes pulse { 
+  0% { opacity: 1; } 
+  50% { opacity: 0.3; } 
+  100% { opacity: 1; } 
+}
+
+@keyframes varredura {
+  0% { top: 10%; opacity: 0.8; }
+  50% { top: 85%; opacity: 1; }
+  100% { top: 10%; opacity: 0.8; }
+}
