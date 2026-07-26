@@ -2,279 +2,217 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>HUD Sci-Fi SSCC Scanner Preciso</title>
-
-  <!-- Leitor de Código de Barras -->
-  <script src="https://unpkg.com/@zxing/library@latest"></script>
-  <!-- IA para Reconhecimento de Texto -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WMS - Leitor de HU (OCR)</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #000; font-family: 'Courier New', Courier, monospace, system-ui; height: 100vh; width: 100vw; overflow: hidden; color: #fff; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #1e1e2d; color: #fff; margin: 0; padding: 15px; }
+    h1 { font-size: 20px; margin-bottom: 10px; color: #00d2ff; }
+    
+    /* Painel de Contagem */
+    #dashboard { display: flex; justify-content: space-around; max-width: 500px; margin: 0 auto 15px auto; gap: 10px; }
+    .card { background: #2b2b40; padding: 15px; border-radius: 10px; flex: 1; box-shadow: 0 4px 8px rgba(0,0,0,0.3); border-bottom: 4px solid #333; }
+    .card.found { border-color: #00e676; }
+    .card.missing { border-color: #ff5252; }
+    .card p { margin: 0; font-size: 14px; color: #aaa; text-transform: uppercase; font-weight: bold; }
+    .card h2 { margin: 5px 0 0 0; font-size: 32px; }
+    .found h2 { color: #00e676; }
+    .missing h2 { color: #ff5252; }
 
-    #container { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; }
-    video { width: 100%; height: 100%; object-fit: cover; }
+    /* Câmera */
+    #video-container { position: relative; max-width: 450px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 3px solid #444; background: #000; }
+    video { width: 100%; display: block; }
+    .mira { position: absolute; top: 35%; left: 10%; width: 80%; height: 30%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.6); pointer-events: none; }
+    #status-ocr { margin-top: 10px; font-size: 14px; color: #ffd700; min-height: 20px; font-weight: 500; }
 
-    /* Canvas invisível para IA */
-    #crop-canvas { display: none; }
-
-    /* --- MIRA AJUSTADA --- */
-    .viewport-guide {
-      position: absolute;
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 92%;
-      max-width: 420px;
-      height: 120px;
-      border: 2px solid #00ffcc;
-      border-radius: 8px;
-      box-shadow: 0 0 15px rgba(0, 255, 204, 0.5), inset 0 0 15px rgba(0, 255, 204, 0.2);
-      pointer-events: none;
-      z-index: 5;
-    }
-
-    .viewport-guide::before, .viewport-guide::after {
-      content: ''; position: absolute; width: 20px; height: 20px; border-color: #ff0055; border-style: solid;
-    }
-    .viewport-guide::before { top: -6px; left: -6px; border-width: 3px 0 0 3px; }
-    .viewport-guide::after { bottom: -6px; right: -6px; border-width: 0 3px 3px 0; }
-
-    .laser {
-      position: absolute; width: 100%; height: 2px; background: #00ffcc; box-shadow: 0 0 12px #00ffcc; top: 50%; animation: scan 1.2s infinite ease-in-out;
-    }
-
-    @keyframes scan {
-      0%, 100% { top: 10%; opacity: 0.3; }
-      50% { top: 90%; opacity: 1; }
-    }
-
-    /* --- PAINEL FLUTUANTE HUD --- */
-    #hud-display {
-      position: absolute;
-      top: calc(40% + 75px);
-      left: 50%;
-      transform: translateX(-50%);
-      width: 90%;
-      max-width: 400px;
-      background: rgba(0, 20, 30, 0.9);
-      border: 1px solid #00ffcc;
-      box-shadow: 0 0 20px rgba(0, 255, 204, 0.4);
-      border-radius: 10px;
-      padding: 12px;
-      text-align: center;
-      z-index: 10;
-      backdrop-filter: blur(5px);
-    }
-
-    .hud-title {
-      font-size: 0.7rem; color: #00ffcc; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; display: flex; justify-content: space-between;
-    }
-
-    .hud-code {
-      font-size: 1.45rem; font-weight: bold; color: #ffffff; text-shadow: 0 0 10px #00ffcc; letter-spacing: 1px; word-break: break-all; margin: 6px 0; font-family: monospace;
-    }
-
-    .hud-status { font-size: 0.75rem; color: #ffeb3b; font-weight: bold; }
-
-    .detected-pulse { animation: pulseGreen 0.5s ease-in-out; }
-
-    @keyframes pulseGreen {
-      0% { transform: scale(1); text-shadow: 0 0 10px #00ffcc; }
-      50% { transform: scale(1.05); text-shadow: 0 0 30px #00ff00; color: #00ff00; }
-      100% { transform: scale(1); text-shadow: 0 0 10px #00ffcc; }
-    }
+    /* PING DE ALERTA (Quando acha uma HU) */
+    #ping-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 230, 118, 0.95); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; color: #000; animation: flash 0.3s; }
+    #ping-overlay h1 { font-size: 40px; color: #000; margin: 0; font-weight: 900; }
+    #ping-overlay p { font-size: 24px; margin: 10px 0; font-weight: bold; }
+    #ping-hu { background: #000; color: #00e676; padding: 10px 20px; border-radius: 8px; font-size: 28px; font-family: monospace; letter-spacing: 2px; margin-top: 15px; }
+    @keyframes flash { from { opacity: 0; transform: scale(1.1); } to { opacity: 1; transform: scale(1); } }
   </style>
 </head>
 <body>
 
-  <div id="container">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="crop-canvas"></canvas>
-    
-    <div class="viewport-guide" id="guide">
-      <div class="laser"></div>
-    </div>
+  <h1>🔍 LEITOR DE ESTOQUE HU (OCR)</h1>
 
-    <div id="hud-display">
-      <div class="hud-title">
-        <span>[ TARGET_DATA ]</span>
-        <span id="engine-tag">INIT...</span>
-      </div>
-      <div id="result-text" class="hud-code">(00)------------------</div>
-      <div id="status-text" class="hud-status">⚡ AGUARDANDO ALVO...</div>
+  <!-- Painel HUs -->
+  <div id="dashboard">
+    <div class="card found">
+      <p>Encontradas</p>
+      <h2 id="qtd-encontradas">-</h2>
+    </div>
+    <div class="card missing">
+      <p>Faltam</p>
+      <h2 id="qtd-faltam">-</h2>
     </div>
   </div>
 
+  <!-- Câmera e Mira -->
+  <div id="video-container">
+    <video id="webcam" autoplay playsinline></video>
+    <div class="mira"></div>
+  </div>
+  
+  <p id="status-ocr">⏳ Inicializando Inteligência OCR...</p>
+
+  <!-- PING DE ALERTA -->
+  <div id="ping-overlay">
+    <h1>🚨 HU ENCONTRADA! 🚨</h1>
+    <p>Baixa registrada no Google Sheets!</p>
+    <div id="ping-hu">000000000000000000</div>
+  </div>
+
   <script>
-    const video = document.getElementById('video');
-    const cropCanvas = document.getElementById('crop-canvas');
-    const guide = document.getElementById('guide');
-    const statusText = document.getElementById('status-text');
-    const resultText = document.getElementById('result-text');
-    const engineTag = document.getElementById('engine-tag');
+    // =================================================================
+    // ⚠️ COLOQUE AQUI A URL QUE VOCÊ COPIOU DO GOOGLE APPS SCRIPT:
+    const SCRIPT_URL = "COLE_SUA_URL_DO_APPS_SCRIPT_AQUI";
+    // =================================================================
 
-    let barcodeDetector = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['code_128'] }) : null;
-    let ocrWorker = null;
-    let isProcessingOcr = false;
-    let lastFoundCode = "";
+    const video = document.getElementById('webcam');
+    const statusOcr = document.getElementById('status-ocr');
+    let ocrAtivo = false;
+    let processandoHU = false;
 
-    // Validador de Dígito de Controle GS1 / SSCC
-    function isValidGS1Checksum(digits18) {
-      if (digits18.length !== 18) return false;
-      let sum = 0;
-      for (let i = 0; i < 17; i++) {
-        let val = parseInt(digits18[i], 10);
-        sum += (i % 2 === 0) ? val * 3 : val;
-      }
-      let checkDigit = (10 - (sum % 10)) % 10;
-      return checkDigit === parseInt(digits18[17], 10);
-    }
-
-    async function initOCR() {
-      engineTag.innerText = "IA_PRECISION_MODE";
-      ocrWorker = await Tesseract.createWorker('eng');
-      await ocrWorker.setParameters({
-        tessedit_char_whitelist: '0123456789()',
-        tessedit_pageseg_mode: '7', // Trata a imagem como uma linha única de texto
-      });
-      engineTag.innerText = "HIGH_ACCURACY_ONLINE";
-    }
-
-    async function initCamera() {
+    // 1. Efeito Sonoro (Bip sem precisar de arquivos externos)
+    function tocarBip() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'environment',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          }
-        });
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime); // Nota A5
+        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.5, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      } catch(e) {}
+    }
 
+    // 2. Atualizar Contadores em Tempo Real da Planilha
+    async function atualizarDashboard() {
+      try {
+        const res = await fetch(SCRIPT_URL);
+        const data = await res.json();
+        document.getElementById('qtd-encontradas').innerText = data.encontradas;
+        document.getElementById('qtd-faltam').innerText = data.pendentes;
+      } catch (e) {
+        console.log("Aguardando conexão com planilha...");
+      }
+    }
+
+    // 3. Inicializar Câmera Traseira
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } })
+      .then(stream => {
         video.srcObject = stream;
-        await video.play();
+        iniciarOCR();
+      })
+      .catch(err => {
+        statusOcr.innerText = "❌ Erro na câmera. Permita o acesso no navegador.";
+        statusOcr.style.color = "#ff5252";
+      });
 
-        const track = stream.getVideoTracks()[0];
-        if (track && track.getCapabilities) {
-          const capabilities = track.getCapabilities();
-          if (capabilities.zoom) {
-            const targetZoom = Math.min(1.5, capabilities.zoom.max);
-            track.applyConstraints({ advanced: [{ zoom: targetZoom }] }).catch(() => {});
-          }
-        }
-
-        await initOCR();
-        statusText.innerText = "🔍 POSICIONE OS NÚMEROS NA MIRA";
-
-        scanLoop();
-        setInterval(ocrFallbackLoop, 400);
-
-      } catch (err) {
-        console.error("Erro na câmera:", err);
-        statusText.innerText = "❌ ERRO: SEM ACESSO À CÂMERA";
-      }
-    }
-
-    // Leitura por código de barras
-    async function scanLoop() {
-      if (video.readyState === video.HAVE_ENOUGH_DATA && barcodeDetector) {
-        try {
-          const barcodes = await barcodeDetector.detect(video);
-          if (barcodes.length > 0) {
-            for (const barcode of barcodes) {
-              validateAndSetResult(barcode.rawValue, "CÓDIGO DE BARRAS");
-            }
-          }
-        } catch (e) {}
-      }
-      requestAnimationFrame(scanLoop);
-    }
-
-    // Leitura por IA Focada Apenas na Linha Numérica
-    async function ocrFallbackLoop() {
-      if (!ocrWorker || isProcessingOcr || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-
-      isProcessingOcr = true;
-
-      try {
-        const videoRect = video.getBoundingClientRect();
-        const guideRect = guide.getBoundingClientRect();
-
-        const scaleX = video.videoWidth / videoRect.width;
-        const scaleY = video.videoHeight / videoRect.height;
-
-        // Foca APENAS na parte inferior da mira (onde estão os números impresso abaixo das barras)
-        const cropX = (guideRect.left - videoRect.left) * scaleX;
-        const cropY = (guideRect.top - videoRect.top + (guideRect.height * 0.55)) * scaleY;
-        const cropW = guideRect.width * scaleX;
-        const cropH = (guideRect.height * 0.45) * scaleY;
-
-        cropCanvas.width = cropW;
-        cropCanvas.height = cropH;
-
-        const ctx = cropCanvas.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-        // Suavização e ganho de contraste mantendo a nitidez
-        const imgData = ctx.getImageData(0, 0, cropW, cropH);
-        const data = imgData.data;
-        for (let i = 0; i < data.length; i += 4) {
-          let grayscale = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-          // Contraste suave
-          grayscale = grayscale < 120 ? grayscale * 0.5 : Math.min(255, grayscale * 1.3);
-          data[i] = grayscale; data[i + 1] = grayscale; data[i + 2] = grayscale;
-        }
-        ctx.putImageData(imgData, 0, 0);
-
-        const { data: { text } } = await ocrWorker.recognize(cropCanvas);
-        
-        if (text) {
-          validateAndSetResult(text, "IA / OCR (TEXTO)");
-        }
-      } catch (err) {
-        console.log("Erro OCR:", err);
-      } finally {
-        isProcessingOcr = false;
-      }
-    }
-
-    // Validação estrita
-    function validateAndSetResult(rawText, metodoUsado) {
-      const clean = rawText.replace(/[^\d]/g, ''); // Remove tudo que não for dígito
+    // 4. Motor OCR (Tesseract) configurado para SÓ LER NÚMEROS
+    async function iniciarOCR() {
+      statusOcr.innerText = "⚡ Carregando motor OCR de números...";
       
-      // Procura qualquer sequência contínua de 18 dígitos
-      const matches = clean.match(/\d{18}/g);
+      const worker = await Tesseract.createWorker('eng');
+      // TRUQUE: Restringir o OCR apenas para algarismos numéricos (evita ler letras erradas)
+      await worker.setParameters({
+        tessedit_char_whitelist: '0123456789',
+      });
 
-      if (matches) {
-        for (const digits of matches) {
-          // Checa se o código atende ao cálculo do dígito GS1
-          const isValid = isValidGS1Checksum(digits);
+      statusOcr.innerText = "🟢 Câmera Pronta! Aponte para os 18 dígitos da etiqueta.";
+      ocrAtivo = true;
 
-          // Se for via código de barras ou se passar no Checksum do OCR
-          if (metodoUsado === "CÓDIGO DE BARRAS" || isValid) {
-            const codigoFormatado = `(00)${digits}`;
+      // Executa a leitura a cada 1.5 segundos
+      setInterval(async () => {
+        if (!ocrAtivo || processandoHU) return;
 
-            if (lastFoundCode !== codigoFormatado) {
-              lastFoundCode = codigoFormatado;
-              resultText.innerText = codigoFormatado;
-              statusText.innerText = `✅ DETECTADO VIA: ${metodoUsado}`;
-              statusText.style.color = "#00ffcc";
+        // Recorta apenas a área central da mira para o OCR ser 5x mais rápido
+        const canvas = document.createElement('canvas');
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        
+        canvas.width = vw * 0.8;
+        canvas.height = vh * 0.3;
+        const ctx = canvas.getContext('2d');
+        
+        // Desenha só o miolo (onde a mira azul está posicionada)
+        ctx.drawImage(video, vw * 0.1, vh * 0.35, vw * 0.8, vh * 0.3, 0, 0, canvas.width, canvas.height);
 
-              resultText.classList.remove('detected-pulse');
-              void resultText.offsetWidth;
-              resultText.classList.add('detected-pulse');
+        const { data: { text } } = await worker.recognize(canvas);
+        
+        // Limpa espaços e quebras de linha e busca exatamente 18 números seguidos
+        const textoLimpo = text.replace(/\D/g, '');
+        const match = textoLimpo.match(/\d{18}/);
 
-              if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-            }
-            break;
-          }
+        if (match) {
+          const huEncontrada = match[0];
+          statusOcr.innerText = `⏳ Lendo HU: ${huEncontrada}...`;
+          verificarHU(huEncontrada);
         }
+      }, 1500);
+    }
+
+    // 5. Enviar HU para a Planilha e disparar o PING
+    async function verificarHU(hu) {
+      processandoHU = true;
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({ hu: hu })
+        });
+        const data = await res.json();
+
+        if (data.status === "sucesso") {
+          tocarBip();
+          
+          // ATIVA O PING NA TELA PARA A EQUIPE!
+          const ping = document.getElementById('ping-overlay');
+          document.getElementById('ping-hu').innerText = hu;
+          ping.style.display = 'flex';
+          
+          atualizarDashboard();
+
+          // Esconde o Ping depois de 3.5 segundos e volta a ler
+          setTimeout(() => {
+            ping.style.display = 'none';
+            statusOcr.innerText = "🟢 Câmera Pronta! Aponte para a próxima etiqueta.";
+            processandoHU = false;
+          }, 3500);
+
+        } else if (data.status === "ja_lido") {
+          statusOcr.innerText = `⚠️ A HU ${hu} JÁ FOI REGISTRADA ANTES!`;
+          statusOcr.style.color = "#ff9800";
+          setTimeout(() => { 
+            statusOcr.innerText = "🟢 Câmera Pronta!"; 
+            statusOcr.style.color = "#ffd700";
+            processandoHU = false; 
+          }, 2500);
+        } else {
+          statusOcr.innerText = `❌ HU ${hu} não pertence à lista desta planilha.`;
+          statusOcr.style.color = "#ff5252";
+          setTimeout(() => { 
+            statusOcr.innerText = "🟢 Câmera Pronta!"; 
+            statusOcr.style.color = "#ffd700";
+            processandoHU = false; 
+          }, 2500);
+        }
+      } catch (e) {
+        statusOcr.innerText = "Erro de conexão com o Google Sheets.";
+        processandoHU = false;
       }
     }
 
-    window.addEventListener('load', initCamera);
+    // Atualiza os contadores ao abrir e a cada 4 segundos (para sincronizar entre celulares)
+    atualizarDashboard();
+    setInterval(atualizarDashboard, 4000);
   </script>
 </body>
 </html>
