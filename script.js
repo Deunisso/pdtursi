@@ -166,7 +166,7 @@ function removerHuDaListaVisual(huEncontrada) {
   });
 }
 
-// Ativa a Câmera
+// Ativa a Câmera em alta resolução
 navigator.mediaDevices.getUserMedia({ 
   video: { 
     facingMode: "environment", 
@@ -183,7 +183,7 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicializa ZXing + Tesseract Otimizado para Números (1789...)
+// Inicializa ZXing + Tesseract configurado no MODO LINHA ÚNICA (PSM 7)
 async function iniciarSistemaLeitura() {
   dicaStatusEl.innerText = "⚡ Inicializando leitor WMS/HU...";
   
@@ -193,23 +193,23 @@ async function iniciarSistemaLeitura() {
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    // Permite estritamente os dígitos e a palavra WMS
-    tessedit_char_whitelist: '0123456789WMSwms',
-    // PSM 6: Trata a imagem como um bloco de texto uniforme
-    tessedit_pageseg_mode: '6',
+    // Apenas números
+    tessedit_char_whitelist: '0123456789',
+    // PSM 7: Trata o recorte estritamente como UMA ÚNICA LINHA DE TEXTO
+    tessedit_pageseg_mode: '7',
   });
 
-  dicaStatusEl.innerText = "🟢 Enquadre a etiqueta WMS / 1789";
+  dicaStatusEl.innerText = "🟢 Enquadre a linha do 1789 ou o código de barras";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraHibrida();
 }
 
-// Loop Principal de Leitura: Ajuste Fino de Imagem + Reconhecimento Numérico
+// Loop Principal de Leitura com Filtro Lateral e PSM 7
 async function loopLeituraHibrida() {
   if (!ocrAtivo || processandoHU) {
-    setTimeout(loopLeituraHibrida, 120);
+    setTimeout(loopLeituraHibrida, 100);
     return;
   }
 
@@ -220,25 +220,22 @@ async function loopLeituraHibrida() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // Região de corte centralizada (Pega o topo WMS e o SSCC 1789)
-      const CROP_W = vw * 0.90;
-      const CROP_H = vh * 0.30; 
-      const CROP_X = vw * 0.05;
-      const CROP_Y = vh * 0.28;
+      // 🎯 CORTA O LADO DIREITO DA ETIQUETA (62% de largura) para ignorar "QUANTITY 20,280" e "BATCH"
+      const CROP_W = vw * 0.62; 
+      const CROP_H = vh * 0.45; // Captura tanto o número SSCC quanto o Código de Barras abaixo
+      const CROP_X = vw * 0.03; // Alinhado à esquerda
+      const CROP_Y = vh * 0.22;
 
-      // Upscaling 2.5x para aumentar os DPIs dos números e evitar confusão de 3, 8, 9 e 0
-      const SCALE = 2.5;
+      const SCALE = 2;
       canvas.width = CROP_W * SCALE;
       canvas.height = CROP_H * SCALE;
       const ctx = canvas.getContext('2d');
 
-      // Aplica filtro de nitidez nativo de alta velocidade
-      ctx.filter = 'grayscale(100%) contrast(220%) brightness(105%)';
+      // Desenha frame limpo para o ZXing (Código de Barras)
       ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
-      ctx.filter = 'none';
 
       // =================================================================
-      // 📊 PRIORIDADE 1: CÓDIGO DE BARRAS (ZXing)
+      // 📊 PRIORIDADE 1: LEITURA DE CÓDIGO DE BARRAS GS1-128 (100% Precisão)
       // =================================================================
       if (codeReader && !processandoHU) {
         try {
@@ -249,13 +246,13 @@ async function loopLeituraHibrida() {
 
             if (matchBarras) {
               processandoHU = true;
-              modoLeituraEl.innerText = "📊 CÓDIGO DE BARRAS DETECTADO";
+              modoLeituraEl.innerText = "📊 CÓDIGO DE BARRAS GS1 DETECTADO";
               
               spanNumsEstabilizados.innerText = matchBarras[0];
               spanNumsAtivos.innerText = "";
               
               contadorDigitosEl.innerText = "18 / 18";
-              dicaStatusEl.innerText = "⚡ BARRAS LIDO COM SUCESSO!";
+              dicaStatusEl.innerText = "⚡ BARRAS LIDO COM 100% PRECISÃO!";
               dicaStatusEl.style.color = "#00e676";
 
               miraBox.classList.remove('lendo');
@@ -271,15 +268,18 @@ async function loopLeituraHibrida() {
       if (processandoHU) return;
 
       // =================================================================
-      // 🏷️ PRIORIDADE 2: OCR NUMÉRICO ESTREITO (BUSCA 1789 + 14 DÍGITOS)
+      // 🏷️ PRIORIDADE 2: OCR DE ALTA PRECISÃO (PSM 7 - LINHA ÚNICA)
       // =================================================================
+      // Aplica contraste calibrado para destacar os números pretos sem deformar as bordas
+      ctx.filter = 'grayscale(100%) contrast(180%) brightness(100%)';
+      ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
+      ctx.filter = 'none';
+
       const result = await workerOCR.recognize(canvas);
       const rawText = result.data.text || "";
-
-      const temWMS = /WMS/i.test(rawText);
       const apenasNumeros = extrairNumeros(rawText);
 
-      // Validação exata do padrão GS1/SSCC (1789 + 14 dígitos)
+      // Validação do padrão GS1/SSCC (1789 + 14 dígitos)
       const REGEX_HU_18 = /1789\d{14}/;
       const matchOCR = apenasNumeros.match(REGEX_HU_18);
       let huEncontrada = matchOCR ? matchOCR[0] : null;
@@ -287,13 +287,8 @@ async function loopLeituraHibrida() {
       if (huEncontrada && !processandoHU) {
         processandoHU = true;
 
-        if (temWMS) {
-          modoLeituraEl.innerText = "🏷️ ETIQUETA WMS DETECTADA";
-          dicaStatusEl.innerText = "✓ WMS & HU VALIDADA!";
-        } else {
-          modoLeituraEl.innerText = "🔢 LEITURA DIRETA (1789)";
-          dicaStatusEl.innerText = "✓ HU COMPLETA ENCONTRADA!";
-        }
+        modoLeituraEl.innerText = "🔢 LEITURA SSCC VALIDADA (1789)";
+        dicaStatusEl.innerText = "✓ HU COMPLETA ENCONTRADA!";
 
         spanNumsEstabilizados.innerText = huEncontrada;
         spanNumsAtivos.innerText = "";
@@ -310,11 +305,7 @@ async function loopLeituraHibrida() {
       } else if (!processandoHU) {
         const indexInicio = apenasNumeros.indexOf('1789');
 
-        if (temWMS) {
-          modoLeituraEl.innerText = "🏷️ WMS DETECTADO - Buscando 1789...";
-        } else {
-          modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
-        }
+        modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
 
         if (indexInicio !== -1) {
           const parcialLida = apenasNumeros.substring(indexInicio, indexInicio + 18);
@@ -335,15 +326,15 @@ async function loopLeituraHibrida() {
           spanNumsAtivos.innerText = ativo + lixoSimulado;
 
           contadorDigitosEl.innerText = `${totalLido} / 18`;
-          dicaStatusEl.innerText = temWMS ? "🏷️ WMS OK! Decifrando 1789..." : "👁️ Identificando Sequência 1789...";
+          dicaStatusEl.innerText = "👁️ Identificando Sequência 1789...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           spanNumsEstabilizados.innerText = "Aguardando";
           spanNumsAtivos.innerText = "...";
           
           contadorDigitosEl.innerText = "0 / 18";
-          dicaStatusEl.innerText = temWMS ? "🏷️ WMS Detectado! Centralize os números" : "🟢 Enquadre a etiqueta WMS / 1789";
-          dicaStatusEl.style.color = temWMS ? "#ffd700" : "#00e676";
+          dicaStatusEl.innerText = "🟢 Aponte para os números ou código de barras";
+          dicaStatusEl.style.color = "#00e676";
         }
       }
     }
@@ -353,7 +344,7 @@ async function loopLeituraHibrida() {
   }
 
   if (!processandoHU) {
-    setTimeout(loopLeituraHibrida, 120);
+    setTimeout(loopLeituraHibrida, 100);
   }
 }
 
