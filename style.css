@@ -1,368 +1,329 @@
-/* =================================================================
-   1. CONFIGURAÇÕES GERAIS E RESETS
-   ================================================================= */
 * {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
-  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  -webkit-tap-highlight-color: transparent;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-body {
-  background-color: #0d1117;
-  color: #e6edf3;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
-  padding: 12px;
-  transition: background-color 0.3s ease;
-}
-
-/* =================================================================
-   2. PAINEL DE CONTROLE / DASHBOARD (TOPO)
-   ================================================================= */
-.dashboard-container {
+html, body {
   width: 100%;
-  max-width: 480px;
+  height: 100vh;
+  overflow: hidden;
+  background: #0b0b10;
+  color: #fff;
   display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
+  justify-content: center;
+  align-items: center;
 }
 
-.card-stat {
-  flex: 1;
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 12px;
-  padding: 10px 14px;
+/* Container Principal Centralizado */
+.app-container {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  width: 100%;
+  max-width: 500px; /* Limita a largura em telas maiores para manter padrão mobile */
+  height: 100vh;
+  padding: 8px;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 0 auto;
+}
+
+/* Dashboard Slim */
+#dashboard {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  height: 55px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.card {
+  background: #161622;
+  border-radius: 8px;
+  flex: 1;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  align-items: center;
+  border-bottom: 3px solid #333;
 }
 
-.card-stat .titulo {
-  font-size: 0.75rem;
-  color: #8b949e;
+.card.found { border-color: #00e676; }
+.card.missing { border-color: #ff5252; }
+
+.card p {
+  font-size: 10px;
+  color: #aaa;
   text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: bold;
 }
 
-.card-stat .valor {
-  font-size: 1.5rem;
-  font-weight: 700;
+.card h2 {
+  font-size: 20px;
   margin-top: 2px;
 }
 
-.card-stat.encontradas .valor {
-  color: #00e676;
-}
+.found h2 { color: #00e676; }
+.missing h2 { color: #ff5252; }
 
-.card-stat.faltam .valor {
-  color: #ff9800;
-}
-
-/* =================================================================
-   3. ÁREA DE CÂMERA E MIRA LASER
-   ================================================================= */
-.camera-wrapper {
+/* Câmera Central */
+#video-container {
   position: relative;
   width: 100%;
-  max-width: 480px;
-  height: 280px;
-  background-color: #000;
-  border-radius: 16px;
+  flex: 1;
+  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid #30363d;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border: 2px solid #2a2a3a;
+  background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 200px;
 }
 
-#webcam {
+video {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* Canvas invisível para processamento interno do OCR */
-#canvas-processamento {
-  display: none;
+/* Botão Flutuante de Lanterna */
+#btn-lanterna {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 50;
+  background: rgba(22, 22, 34, 0.85);
+  border: 1px solid #00d2ff;
+  color: #00d2ff;
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-/* Caixa da Mira do Scanner */
-#mira-box {
+#btn-lanterna.ativo {
+  background: #00d2ff;
+  color: #000;
+  box-shadow: 0 0 10px #00d2ff;
+}
+
+/* Mira Adaptativa Centralizada */
+.mira {
   position: absolute;
-  width: 88%;
-  height: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 10px;
-  overflow: hidden; /* Garante que o laser fique dentro da caixa */
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  top: 52%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  height: 28%; /* Enquadramento mais fino para isolar o 1789 */
+  border: 2px dashed #00d2ff;
+  box-shadow: 0 0 0 999px rgba(0,0,0,0.65);
+  border-radius: 8px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px;
+  transition: all 0.2s ease;
+}
+
+.mira.lendo { border-color: #ffd700; }
+.mira.sucesso {
+  border-color: #00e676;
+  background: rgba(0, 230, 118, 0.18);
+  box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 25px #00e676;
+}
+
+/* Visor Interno de Leitura Semi-Transparente */
+.visor-topo {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #00d2ff;
+  font-weight: bold;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+}
+
+/* Coloca a caixa "Aguardando 1789..." ACIMA da área verde de enquadramento */
+.visor-numeros {
+  position: absolute;
+  top: -45px; /* Move para cima da borda da mira */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 95%;
+  font-family: 'Courier New', monospace;
+  font-size: 15px;
+  font-weight: 900;
+  color: rgba(0, 230, 118, 0.9);
+  text-align: center;
+  letter-spacing: 1.5px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  background: rgba(0, 0, 0, 0.75);
+  padding: 4px 8px;
+  border-radius: 6px;
+  word-break: break-all;
+  border: 1px solid rgba(0, 230, 118, 0.4);
   pointer-events: none;
 }
 
-/* Cantoneiras Visuais de Enquadramento */
-#mira-box::before {
-  content: "";
+.visor-status {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  border: 2px dashed rgba(255, 255, 255, 0.15);
+  bottom: -32px; /* Move o status para a parte inferior da mira */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  font-size: 11px;
+  color: #ffd700;
+  text-align: center;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  background: rgba(0, 0, 0, 0.75);
+  padding: 3px;
+  border-radius: 4px;
+}
+
+/* Pop-up de Sucesso */
+#notificacao-discreta {
+  display: none;
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  background: #12121a;
+  border: 2px solid #00e676;
   border-radius: 8px;
+  padding: 8px 12px;
+  z-index: 100;
+  box-shadow: 0 4px 15px rgba(0,230,118,0.4);
+  text-align: center;
+  animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* --- ESTADO 1: ESCANEAR (Laser Vermelho Ativo) --- */
-#mira-box.lendo {
-  border-color: rgba(255, 23, 68, 0.6);
-  box-shadow: 0 0 15px rgba(255, 23, 68, 0.3);
+#notificacao-discreta .titulo {
+  font-size: 10px;
+  color: #00e676;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
-#mira-box.lendo::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  background: #ff1744;
-  box-shadow: 0 0 12px #ff1744, 0 0 24px #ff1744;
-  animation: varrerLaser 1.5s ease-in-out infinite alternate;
-  z-index: 10;
-}
-
-/* --- ESTADO 2: SUCESSO (Laser Verde Fixo e Pulso) --- */
-#mira-box.sucesso {
-  border-color: #00e676 !important;
-  box-shadow: 0 0 25px rgba(0, 230, 118, 0.8) !important;
-}
-
-#mira-box.sucesso::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  background: #00e676;
-  box-shadow: 0 0 20px #00e676, 0 0 40px #00e676;
-  animation: pulsoSucesso 0.4s ease-in-out 2;
-  z-index: 10;
-}
-
-/* Botão Flutuante de Lanterna na Câmera */
-.btn-lanterna {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(22, 27, 34, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+#notificacao-discreta .hu-codigo {
+  font-family: monospace;
+  font-size: 15px;
   color: #fff;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
+  font-weight: bold;
+  margin-top: 2px;
+  letter-spacing: 1px;
+}
+
+/* Painel de HUs Pendentes (Abaixo da Câmera) */
+#painel-pendentes {
+  background: #12121a;
+  border: 1px solid #2a2a3a;
+  border-radius: 10px;
+  padding: 10px;
+  height: 150px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.pendentes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #222230;
+}
+
+.pendentes-header h3 {
+  font-size: 11px;
+  color: #ff5252;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pendentes-header span {
+  font-size: 10px;
+  background: rgba(255, 82, 82, 0.2);
+  color: #ff5252;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: bold;
+}
+
+.lista-hus {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 2px;
+  justify-content: center;
+  align-content: flex-start;
+}
+
+.lista-hus::-webkit-scrollbar { width: 4px; }
+.lista-hus::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 4px; }
+
+.hu-chip {
+  background: #1c1c2b;
+  border: 1px solid #00d2ff;
+  color: #ffd700;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: 900;
+  padding: 6px 12px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  transition: all 0.2s ease;
-  z-index: 20;
-}
-
-.btn-lanterna.ativo {
-  background: #ffd700;
-  color: #000;
-  border-color: #ffd700;
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
-}
-
-/* =================================================================
-   4. PAINEL DE LEITURA E STATUS (MEIO)
-   ================================================================= */
-.status-panel {
-  width: 100%;
-  max-width: 480px;
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 16px;
-  padding: 16px;
-  margin-top: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  text-align: center;
-}
-
-.modo-badge {
-  display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #58a6ff;
-  background: rgba(56, 139, 253, 0.15);
-  padding: 4px 10px;
-  border-radius: 20px;
-  margin-bottom: 8px;
-  letter-spacing: 0.5px;
-}
-
-.visor-numeros {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #ffffff;
-  background: #0d1117;
-  border: 1px dashed #30363d;
-  padding: 10px;
-  border-radius: 8px;
-  letter-spacing: 2px;
-  word-break: break-all;
-  margin-bottom: 8px;
-}
-
-.info-linha {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.85rem;
-}
-
-#dica-status {
-  font-weight: 600;
-  color: #00e676;
-  transition: color 0.2s ease;
-}
-
-#contador-digitos {
-  color: #8b949e;
-  font-weight: 600;
-}
-
-/* =================================================================
-   5. NOTIFICAÇÃO DISCRETA DE SUCESSO (TOAST)
-   ================================================================= */
-#notificacao-discreta {
-  display: none;
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #00e676;
-  color: #000;
-  padding: 10px 20px;
-  border-radius: 30px;
-  font-weight: 700;
-  font-size: 0.9rem;
-  box-shadow: 0 4px 20px rgba(0, 230, 118, 0.5);
-  z-index: 1000;
-  animation: deslizarNotificacao 0.3s ease-out;
-}
-
-/* =================================================================
-   6. LISTA INFERIOR DE HUs PENDENTES (CARDS / CHIPS)
-   ================================================================= */
-.container-pendentes {
-  width: 100%;
-  max-width: 480px;
-  margin-top: 16px;
-  flex: 1;
-}
-
-.cabecalho-lista {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  padding: 0 4px;
-}
-
-.cabecalho-lista h3 {
-  font-size: 0.9rem;
-  color: #8b949e;
-  text-transform: uppercase;
-  font-weight: 600;
-}
-
-.badge-contador {
-  background: #21262d;
-  color: #c9d1d9;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 12px;
-  border: 1px solid #30363d;
-}
-
-.grid-lista-hus {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 8px;
-  max-height: 200px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.hu-chip {
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 8px;
-  padding: 8px 4px;
-  text-align: center;
-  font-family: monospace;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #c9d1d9;
   transition: all 0.3s ease;
 }
 
 .hu-chip.removendo {
-  transform: scale(0.5);
+  transform: scale(0.8);
   opacity: 0;
   background: #00e676;
   color: #000;
 }
 
 .lista-vazia {
-  grid-column: 1 / -1;
+  width: 100%;
   text-align: center;
-  padding: 20px;
-  background: #161b22;
-  border: 1px dashed #30363d;
-  border-radius: 12px;
-  color: #8b949e;
+  color: #00e676;
+  font-size: 12px;
+  font-weight: bold;
+  margin: auto 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 4px;
-  font-size: 0.9rem;
 }
 
-/* =================================================================
-   7. ANIMAÇÕES E KEYFRAMES
-   ================================================================= */
-@keyframes varrerLaser {
-  0% { top: 0%; }
-  100% { top: 95%; }
-}
-
-@keyframes pulsoSucesso {
-  0% { opacity: 0.2; transform: scaleY(1); }
-  50% { opacity: 1; transform: scaleY(2); }
-  100% { opacity: 0.2; transform: scaleY(1); }
-}
-
-@keyframes flashTela {
-  0% { background-color: rgba(0, 230, 118, 0.25); }
-  100% { background-color: transparent; }
-}
-
-@keyframes deslizarNotificacao {
-  from { transform: translate(-50%, -20px); opacity: 0; }
+@keyframes slideDown {
+  from { transform: translate(-50%, -30px); opacity: 0; }
   to { transform: translate(-50%, 0); opacity: 1; }
 }
 
-.flash-sucesso {
-  animation: flashTela 0.3s ease-out;
+/* Oculta o canvas completamente sem afetar o layout */
+#canvas-processamento { 
+  display: none !important;
+  position: absolute;
+  width: 0;
+  height: 0;
 }
