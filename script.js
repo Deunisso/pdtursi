@@ -5,10 +5,8 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-Cgq
 
 // Elementos DOM
 const video = document.getElementById('webcam');
-const spanNumsEstabilizados = document.getElementById('nums-estabilizados');
-const spanNumsAtivos = document.getElementById('nums-ativos');
-const contadorDigitosEl = document.getElementById('contador-digitos');
 const modoLeituraEl = document.getElementById('modo-leitura');
+const contadorDigitosEl = document.getElementById('contador-digitos');
 const canvas = document.getElementById('canvas-processamento');
 
 // Overlay HD
@@ -27,7 +25,6 @@ if (!canvasOverlay) {
 }
 
 let elementosHUDAtivos = [];
-let animOffset = 0;
 let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
@@ -54,7 +51,7 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Inicializa Câmera
+// Inicia a câmera
 navigator.mediaDevices.getUserMedia({ 
   video: { 
     facingMode: "environment", 
@@ -79,7 +76,7 @@ async function iniciarSistemaLeitura() {
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+    tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
     tessedit_pageseg_mode: '11', 
   });
 
@@ -87,7 +84,7 @@ async function iniciarSistemaLeitura() {
   loopLeituraOCR();
 }
 
-// 🎨 ENGINE GRÁFICA HUD (60 FPS)
+// Borda verde desenhada na tela sobre o número lido
 function renderizarHUDLoop() {
   const ctx = canvasOverlay.getContext('2d');
   canvasOverlay.width = video.clientWidth;
@@ -95,15 +92,12 @@ function renderizarHUDLoop() {
 
   ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
 
-  animOffset += 2;
-  if (animOffset > 100) animOffset = 0;
-
   if (video.videoWidth > 0 && elementosHUDAtivos.length > 0) {
     const scaleX = canvasOverlay.width / video.videoWidth;
     const scaleY = canvasOverlay.height / video.videoHeight;
 
     elementosHUDAtivos.forEach(item => {
-      const { bbox, corRGB, tipo } = item;
+      const { bbox } = item;
       if (!bbox) return;
 
       const x = bbox.x0 * scaleX;
@@ -111,27 +105,18 @@ function renderizarHUDLoop() {
       const w = (bbox.x1 - bbox.x0) * scaleX;
       const h = (bbox.y1 - bbox.y0) * scaleY;
 
-      // Retângulo com brilho
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = `rgba(${corRGB}, 0.9)`;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#00e676';
+      ctx.fillStyle = 'rgba(0, 230, 118, 0.15)';
       ctx.strokeRect(x, y, w, h);
-
-      if (tipo === 'TARGET') {
-        const scanY = y + (h * (animOffset / 100));
-        ctx.beginPath();
-        ctx.moveTo(x, scanY);
-        ctx.lineTo(x + w, scanY);
-        ctx.strokeStyle = `rgba(${corRGB}, 1)`;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
+      ctx.fillRect(x, y, w, h);
     });
   }
 
   requestAnimationFrame(renderizarHUDLoop);
 }
 
-// 🔍 LOOP DE PROCESSAMENTO (IA / OCR)
+// Processamento OCR
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 80);
@@ -145,7 +130,7 @@ async function loopLeituraOCR() {
     if (vw > 0 && vh > 0) {
       const novosElementos = [];
 
-      // BARCODE
+      // 1. Leitura por Código de Barras
       if (detectorBarra) {
         try {
           const codigos = await detectorBarra.detect(video);
@@ -163,25 +148,20 @@ async function loopLeituraOCR() {
                   y0: codigo.boundingBox.y,
                   x1: codigo.boundingBox.x + codigo.boundingBox.width,
                   y1: codigo.boundingBox.y + codigo.boundingBox.height
-                },
-                corRGB: "0, 230, 118",
-                tipo: "TARGET"
+                }
               });
 
               elementosHUDAtivos = novosElementos;
-
               if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
-              if (spanNumsEstabilizados) spanNumsEstabilizados.innerText = huEncontrada;
-              if (spanNumsAtivos) spanNumsAtivos.innerText = "";
 
-              await verificarHU(huEncontrada);
+              await enviarParaAppsScript(huEncontrada);
               return;
             }
           }
         } catch (eBarra) {}
       }
 
-      // TEXTO OCR
+      // 2. Leitura OCR por Texto (SSCC)
       canvas.width = vw;
       canvas.height = vh;
       const ctx = canvas.getContext('2d');
@@ -199,19 +179,12 @@ async function loopLeituraOCR() {
         const huEncontrada = extrairNumeros(matchSSCC.text).match(/1789\d{14}/)[0];
         processandoHU = true;
 
-        novosElementos.push({
-          bbox: matchSSCC.bbox,
-          corRGB: "0, 230, 118",
-          tipo: "TARGET"
-        });
-
+        novosElementos.push({ bbox: matchSSCC.bbox });
         elementosHUDAtivos = novosElementos;
 
-        if (modoLeituraEl) modoLeituraEl.innerText = "HU DETECTADA!";
-        if (spanNumsEstabilizados) spanNumsEstabilizados.innerText = huEncontrada;
-        if (spanNumsAtivos) spanNumsAtivos.innerText = "";
+        if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
 
-        await verificarHU(huEncontrada);
+        await enviarParaAppsScript(huEncontrada);
         return;
       } else {
         elementosHUDAtivos = novosElementos;
@@ -227,34 +200,38 @@ async function loopLeituraOCR() {
   }
 }
 
-// CONEXÃO COM GOOGLE APPS SCRIPT
-async function verificarHU(huCompleta) {
+// 🟢 CONEXÃO GARANTIDA COM O GOOGLE APPS SCRIPT
+async function enviarParaAppsScript(huCompleta) {
   const timerSeguranca = setTimeout(() => {
     if (processandoHU) resetarVisor();
-  }, 5000);
+  }, 4000);
 
   try {
+    // Usando URLSearchParams + no-cors para contornar qualquer bloqueio da planilha
+    const dados = new URLSearchParams();
+    dados.append('hu', huCompleta);
+
     await fetch(SCRIPT_URL, {
       method: 'POST',
-      mode: 'cors',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ hu: huCompleta })
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: dados
     });
 
     clearTimeout(timerSeguranca);
     tocarBip();
-    setTimeout(resetarVisor, 1000);
+    setTimeout(resetarVisor, 1200);
   } catch (e) {
+    console.error("Erro no envio:", e);
     clearTimeout(timerSeguranca);
-    setTimeout(resetarVisor, 1000);
+    setTimeout(resetarVisor, 1200);
   }
 }
 
 function resetarVisor() {
   elementosHUDAtivos = [];
-  if (spanNumsEstabilizados) spanNumsEstabilizados.innerText = "";
-  if (spanNumsAtivos) spanNumsAtivos.innerText = ""; // Limpo sem os ????
   if (modoLeituraEl) modoLeituraEl.innerText = "ESCANEANDO...";
 
   processandoHU = false;
