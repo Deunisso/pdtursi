@@ -3,16 +3,6 @@
 // =================================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
-// Carregamento dinâmico da biblioteca ZXing (Leitor de Código de Barras)
-(function carregarZXing() {
-  if (!window.ZXing) {
-    const script = document.createElement('script');
-    script.src = "https://unpkg.com/@zxing/library@latest";
-    script.async = true;
-    document.head.appendChild(script);
-  }
-})();
-
 // Mapeamento dos elementos do DOM
 const video = document.getElementById('webcam');
 const miraBox = document.getElementById('mira-box');
@@ -32,7 +22,6 @@ const canvas = document.getElementById('canvas-processamento');
 let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
-let codeReader = null;
 let lanternaLigada = false;
 let listaPendentesGlobal = [];
 
@@ -54,21 +43,31 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Controle da Lanterna do Celular
+// 🔦 Controle da Lanterna Universal (Android/Chrome e iOS/Safari)
 async function alternarLanterna() {
   const stream = video.srcObject;
   if (!stream) return;
   const track = stream.getVideoTracks()[0];
+  if (!track) return;
+
   try {
-    const capabilities = track.getCapabilities();
-    if (capabilities.torch) {
-      lanternaLigada = !lanternaLigada;
-      await track.applyConstraints({ advanced: [{ torch: lanternaLigada }] });
+    const novoEstado = !lanternaLigada;
+    await track.applyConstraints({
+      advanced: [{ torch: novoEstado }]
+    });
+
+    lanternaLigada = novoEstado;
+    if (btnLanterna) {
       btnLanterna.classList.toggle('ativo', lanternaLigada);
-    } else {
-      alert("Lanterna não suportada neste dispositivo.");
     }
-  } catch(e) {}
+  } catch (e) {
+    console.error("Erro ao ativar lanterna:", e);
+    alert("A lanterna não é suportada ou está sendo bloqueada neste dispositivo/navegador.");
+  }
+}
+
+if (btnLanterna) {
+  btnLanterna.addEventListener('click', alternarLanterna);
 }
 
 // Extrai estritamente caracteres numéricos
@@ -76,7 +75,7 @@ function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// Algoritmo de Binarização Pura (Preto e Branco sem ruídos de linhas)
+// Algoritmo de Binarização Pura (Preto e Branco sem ruídos)
 function binarizarImagem(ctx, width, height) {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
@@ -199,13 +198,9 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização das Bibliotecas
+// Inicialização do Tesseract OCR
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Calibrando leitor de precisão...";
-  
-  if (window.ZXing) {
-    codeReader = new ZXing.BrowserMultiFormatReader();
-  }
+  dicaStatusEl.innerText = "⚡ Calibrando leitor de números...";
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
@@ -213,17 +208,17 @@ async function iniciarSistemaLeitura() {
     tessedit_pageseg_mode: '7',            // PSM 7: Trata a imagem como uma ÚNICA LINHA de texto
   });
 
-  dicaStatusEl.innerText = "🟢 Posicione o código '1789...' no centro";
+  dicaStatusEl.innerText = "🟢 Posicione os números '1789...' na mira";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
-  loopLeituraHibrida();
+  loopLeituraOCR();
 }
 
-// Loop de Leitura Otimizado
-async function loopLeituraHibrida() {
+// Loop Principal focado 100% em OCR Numérico
+async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
-    setTimeout(loopLeituraHibrida, 100);
+    setTimeout(loopLeituraOCR, 100);
     return;
   }
 
@@ -234,75 +229,39 @@ async function loopLeituraHibrida() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // 🎯 REGIONALIZADOR CIRÚRGICO DO SSCC (1789...)
-      // Corta especificamente o quadrante superior esquerdo (evita QUANTITY, MATERIAL e BATCH)
-      const CROP_W = vw * 0.52;  // Apenas metade esquerda da etiqueta
-      const CROP_H = vh * 0.18;  // Altura focada somente na linha do 1789
-      const CROP_X = vw * 0.04;  // Pequena margem da esquerda
-      const CROP_Y = vh * 0.24;  // Logo abaixo do cabeçalho WMS/Descrição
+      // 🎯 CORTE CIRÚRGICO DA LINHA DO SSCC (1789...)
+      const CROP_W = vw * 0.52;  // Metade esquerda da etiqueta (evita QUANTITY e BATCH)
+      const CROP_H = vh * 0.18;  // Focado apenas na linha do 1789
+      const CROP_X = vw * 0.04;  // Margem esquerda
+      const CROP_Y = vh * 0.24;  // Abaixo do WMS e acima do MATERIAL
 
       const SCALE = 2.2;
-      const PADDING = 20; // Borda branca de respiro para o Tesseract não "engolir" o primeiro 1
+      const PADDING = 20;
 
       canvas.width = (CROP_W * SCALE) + (PADDING * 2);
       canvas.height = (CROP_H * SCALE) + (PADDING * 2);
       
       const ctx = canvas.getContext('2d');
       
-      // Preenche fundo de branco
+      // Fundo branco
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Desenha o recorte no centro com margem
+      // Desenha a imagem recortada
       ctx.drawImage(
         video, 
         CROP_X, CROP_Y, CROP_W, CROP_H, 
         PADDING, PADDING, CROP_W * SCALE, CROP_H * SCALE
       );
 
-      // =================================================================
-      // 📊 LEITURA VIA CÓDIGO DE BARRAS (ZXing)
-      // =================================================================
-      if (codeReader && !processandoHU) {
-        try {
-          const barcodeResult = await codeReader.decodeFromCanvas(canvas);
-          if (barcodeResult && barcodeResult.text) {
-            const textoBarras = extrairNumeros(barcodeResult.text);
-            const matchBarras = textoBarras.match(/1789\d{14}/);
-
-            if (matchBarras && matchBarras[0].length === 18) {
-              processandoHU = true;
-              modoLeituraEl.innerText = "📊 BARCODE GS1 CONFIRMADO";
-              
-              spanNumsEstabilizados.innerText = matchBarras[0];
-              spanNumsAtivos.innerText = "";
-              
-              contadorDigitosEl.innerText = "18 / 18";
-              dicaStatusEl.innerText = "⚡ BARRAS LIDO COM SUCESSO!";
-              dicaStatusEl.style.color = "#00e676";
-
-              miraBox.classList.remove('lendo');
-              miraBox.classList.add('sucesso');
-              
-              await verificarHU(matchBarras[0]);
-              return;
-            }
-          }
-        } catch (e) {}
-      }
-
-      if (processandoHU) return;
-
-      // =================================================================
-      // 🏷️ LEITURA OCR PURE-BLACK (1789 + 14 DÍGITOS = 18 EXACT)
-      // =================================================================
-      // Aplica processamento de binarização pura (Preto e Branco estrito)
+      // Aplica processamento de alto contraste Preto e Branco
       binarizarImagem(ctx, canvas.width, canvas.height);
 
+      // Executa a leitura visual
       const result = await workerOCR.recognize(canvas);
       const apenasNumeros = extrairNumeros(result.data.text || "");
 
-      // Expressão Regular Rígida: Precisa iniciar com 1789 e ter exatos 18 dígitos
+      // Validação: precisa começar com 1789 e ter exatamente 18 dígitos
       const REGEX_SSCC_EXATO = /1789\d{14}/;
       const matchOCR = apenasNumeros.match(REGEX_SSCC_EXATO);
 
@@ -310,7 +269,7 @@ async function loopLeituraHibrida() {
         const huValida = matchOCR[0];
         processandoHU = true;
 
-        modoLeituraEl.innerText = "🔢 SSCC 18 DÍGITOS CONFIRMADO";
+        modoLeituraEl.innerText = "🔢 SSCC 18 DÍGITOS DETECTADO";
         dicaStatusEl.innerText = "✓ HU VÁLIDA ENCONTRADA!";
 
         spanNumsEstabilizados.innerText = huValida;
@@ -349,7 +308,7 @@ async function loopLeituraHibrida() {
           spanNumsAtivos.innerText = ativo + mascaraRestante;
 
           contadorDigitosEl.innerText = `${totalLido} / 18`;
-          dicaStatusEl.innerText = "👁️ Alinhando sequência 1789...";
+          dicaStatusEl.innerText = "👁️ Lendo números 1789...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           spanNumsEstabilizados.innerText = "Aguardando";
@@ -363,11 +322,11 @@ async function loopLeituraHibrida() {
     }
     miraBox.classList.remove('lendo');
   } catch (e) {
-    console.error("Erro no loop:", e);
+    console.error("Erro no loop OCR:", e);
   }
 
   if (!processandoHU) {
-    setTimeout(loopLeituraHibrida, 100);
+    setTimeout(loopLeituraOCR, 100);
   }
 }
 
@@ -429,7 +388,7 @@ function resetarVisor() {
 
   // LIBERA A CÂMERA E REINICIA O LOOP
   processandoHU = false;
-  setTimeout(loopLeituraHibrida, 200);
+  setTimeout(loopLeituraOCR, 200);
 }
 
 // Atualização Inicial do Dashboard
