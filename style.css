@@ -2,86 +2,36 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
 }
 
 html, body {
-  width: 100%;
+  width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #0b0b10;
-  color: #fff;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-/* Container Principal Centralizado */
-.app-container {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: 500px; /* Limita a largura em telas maiores para manter padrão mobile */
-  height: 100vh;
-  padding: 8px;
-  gap: 8px;
-  justify-content: space-between;
-  margin: 0 auto;
-}
-
-/* Dashboard Slim */
-#dashboard {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  height: 55px;
-  width: 100%;
-  flex-shrink: 0;
-}
-
-.card {
-  background: #161622;
-  border-radius: 8px;
-  flex: 1;
-  padding: 6px 10px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  border-bottom: 3px solid #333;
-}
-
-.card.found { border-color: #00e676; }
-.card.missing { border-color: #ff5252; }
-
-.card p {
-  font-size: 10px;
-  color: #aaa;
-  text-transform: uppercase;
-  font-weight: bold;
-}
-
-.card h2 {
-  font-size: 20px;
-  margin-top: 2px;
-}
-
-.found h2 { color: #00e676; }
-.missing h2 { color: #ff5252; }
-
-/* Câmera Central */
-#video-container {
-  position: relative;
-  width: 100%;
-  flex: 1;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 2px solid #2a2a3a;
   background: #000;
+  color: #fff;
+}
+
+/* Container de Tela Cheia para Modo Paisagem */
+.app-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
   display: flex;
-  align-items: center;
   justify-content: center;
-  min-height: 200px;
+  align-items: center;
+}
+
+/* Câmera ocupando toda a tela */
+#video-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  background: #000;
 }
 
 video {
@@ -90,278 +40,90 @@ video {
   object-fit: cover;
 }
 
-/* Botão Flutuante de Lanterna */
-#btn-lanterna {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 50;
-  background: rgba(22, 22, 34, 0.85);
-  border: 1px solid #00d2ff;
-  color: #00d2ff;
-  padding: 6px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: bold;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-#btn-lanterna.ativo {
-  background: #00d2ff;
-  color: #000;
-  box-shadow: 0 0 10px #00d2ff;
-}
-
-/* Mira Adaptativa Centralizada */
-.mira {
-  position: absolute;
-  top: 52%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 90%;
-  height: 28%; /* Enquadramento mais fino para isolar o 1789 */
-  border: 2px dashed #00d2ff;
-  box-shadow: 0 0 0 999px rgba(0,0,0,0.65);
-  border-radius: 8px;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 6px;
-  transition: all 0.2s ease;
-}
-
-.mira.lendo { border-color: #ffd700; }
-.mira.sucesso {
-  border-color: #00e676;
-  background: rgba(0, 230, 118, 0.18);
-  box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 25px #00e676;
-}
-
-/* Visor Interno de Leitura Semi-Transparente */
-.visor-topo {
-  display: flex;
-  justify-content: space-between;
-  font-size: 9px;
-  color: #00d2ff;
-  font-weight: bold;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-}
-
-/* Coloca a caixa de leitura ACIMA da área verde de enquadramento */
+/* HUD FLUTUANTE SUPERIOR (Estilo Homem de Ferro / Sci-Fi) */
 .visor-numeros {
   position: absolute;
-  top: -45px;
+  top: 15px;
   left: 50%;
   transform: translateX(-50%);
-  width: 95%;
-  font-family: 'Courier New', monospace;
-  font-size: 15px;
-  font-weight: 900;
-  text-align: center;
-  letter-spacing: 1.5px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  word-break: break-all;
-  pointer-events: none;
-}
-
-/* =================================================================
-   🌌 VIBE FUTURISTA / HOMEM DE FERRO (HUD)
-   ================================================================= */
-
-.visor-vibe-futurista {
-  background: rgba(0, 5, 12, 0.88) !important;
-  border: 1px solid rgba(0, 210, 255, 0.4) !important;
-  box-shadow: 0 0 15px rgba(0, 210, 255, 0.2) inset, 0 4px 10px rgba(0,0,0,0.7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-}
-
-/* Parte estabilizada: Verde Neon com brilho forte */
-.nums-estaveis {
-  color: #00e676;
-  font-weight: 900;
-  text-shadow: 0 0 8px rgba(0, 230, 118, 0.9), 0 0 15px rgba(0, 230, 118, 0.5);
-}
-
-/* Parte ativa (processando): Dourado/Amarelo com animação de pulsação */
-.nums-piscando {
-  color: #ffd700;
-  font-weight: 900;
-  text-shadow: 0 0 6px rgba(255, 215, 0, 0.8);
-  animation: pulsarIdentificacao 0.12s ease-in-out infinite alternate;
-}
-
-/* Animação que simula o HUD oscilando em tempo real */
-@keyframes pulsarIdentificacao {
-  0% {
-    opacity: 0.5;
-    filter: blur(0.6px);
-  }
-  100% {
-    opacity: 1;
-    filter: blur(0px);
-    text-shadow: 0 0 10px rgba(255, 215, 0, 1), 0 0 18px rgba(255, 215, 0, 0.7);
-  }
-}
-
-.visor-status {
-  position: absolute;
-  bottom: -32px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90%;
-  font-size: 11px;
-  color: #ffd700;
-  text-align: center;
-  font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-  background: rgba(0, 0, 0, 0.75);
-  padding: 3px;
-  border-radius: 4px;
-}
-
-/* Pop-up de Sucesso */
-#notificacao-discreta {
-  display: none;
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90%;
-  background: #12121a;
-  border: 2px solid #00e676;
-  border-radius: 8px;
-  padding: 8px 12px;
-  z-index: 100;
-  box-shadow: 0 4px 15px rgba(0,230,118,0.4);
-  text-align: center;
-  animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-#notificacao-discreta .titulo {
-  font-size: 10px;
-  color: #00e676;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-#notificacao-discreta .hu-codigo {
-  font-family: monospace;
-  font-size: 15px;
-  color: #fff;
-  font-weight: bold;
-  margin-top: 2px;
-  letter-spacing: 1px;
-}
-
-/* Painel de HUs Pendentes (Abaixo da Câmera) */
-#painel-pendentes {
-  background: #12121a;
-  border: 1px solid #2a2a3a;
-  border-radius: 10px;
-  padding: 10px;
-  height: 150px;
-  width: 100%;
+  z-index: 20;
+  width: auto;
+  min-width: 320px;
+  max-width: 90%;
+  padding: 8px 18px;
+  border-radius: 30px;
+  background: rgba(8, 12, 20, 0.85);
+  border: 1px solid rgba(0, 230, 118, 0.5);
+  box-shadow: 0 0 15px rgba(0, 230, 118, 0.2), 0 4px 20px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
 }
 
-.pendentes-header {
+.visor-topo {
+  width: 100%;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #222230;
-}
-
-.pendentes-header h3 {
-  font-size: 11px;
-  color: #ff5252;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.pendentes-header span {
   font-size: 10px;
-  background: rgba(255, 82, 82, 0.2);
-  color: #ff5252;
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-weight: bold;
-}
-
-.lista-hus {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  overflow-y: auto;
-  flex: 1;
-  padding-right: 2px;
-  justify-content: center;
-  align-content: flex-start;
-}
-
-.lista-hus::-webkit-scrollbar { width: 4px; }
-.lista-hus::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 4px; }
-
-.hu-chip {
-  background: #1c1c2b;
-  border: 1px solid #00d2ff;
-  color: #ffd700;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-  font-weight: 900;
-  padding: 6px 12px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-}
-
-.hu-chip.removendo {
-  transform: scale(0.8);
-  opacity: 0;
-  background: #00e676;
-  color: #000;
-}
-
-.lista-vazia {
-  width: 100%;
-  text-align: center;
   color: #00e676;
-  font-size: 12px;
-  font-weight: bold;
-  margin: auto 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 2px;
 }
 
-@keyframes slideDown {
-  from { transform: translate(-50%, -30px); opacity: 0; }
-  to { transform: translate(-50%, 0); opacity: 1; }
+#modo-leitura {
+  text-transform: uppercase;
 }
 
-/* Oculta o canvas completamente */
-#canvas-processamento { 
-  display: none !important;
+#contador-digitos {
+  font-family: monospace;
+}
+
+/* Display de Dígitos */
+.visor-vibe-futurista {
+  font-family: 'Courier New', monospace;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+.nums-estaveis {
+  color: #00e676;
+  text-shadow: 0 0 10px rgba(0, 230, 118, 0.8);
+}
+
+.nums-piscando {
+  color: #ffd700;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.8);
+  animation: pulsarHUD 0.15s ease-in-out infinite alternate;
+}
+
+@keyframes pulsarHUD {
+  0% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+/* Mira Suave Central (Apenas Guia Visual) */
+.mira {
   position: absolute;
-  width: 0;
-  height: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60%;
+  height: 35%;
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Oculta Elementos Não Utilizados */
+#canvas-processamento,
+#painel-pendentes,
+#dashboard,
+.visor-status,
+.dica-status {
+  display: none !important;
 }
