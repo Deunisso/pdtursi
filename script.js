@@ -16,7 +16,8 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-Cgq
 // Mapeamento dos elementos do DOM
 const video = document.getElementById('webcam');
 const miraBox = document.getElementById('mira-box');
-const numerosLidosEl = document.getElementById('numeros-lidos');
+const spanNumsEstabilizados = document.getElementById('nums-estabilizados');
+const spanNumsAtivos = document.getElementById('nums-ativos');
 const contadorDigitosEl = document.getElementById('contador-digitos');
 const dicaStatusEl = document.getElementById('dica-status');
 const modoLeituraEl = document.getElementById('modo-leitura');
@@ -246,7 +247,7 @@ async function iniciarSistemaLeitura() {
   loopLeituraHibrida();
 }
 
-// Loop Principal de Leitura com Desbloqueio Garantido
+// Loop Principal de Leitura com Visor HUD Futurista
 async function loopLeituraHibrida() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraHibrida, 150);
@@ -281,9 +282,12 @@ async function loopLeituraHibrida() {
             const matchBarras = textoBarras.match(/1789\d{14}/);
 
             if (matchBarras) {
-              processandoHU = true; // Trava o loop para enviar os dados
+              processandoHU = true;
               modoLeituraEl.innerText = "📊 CÓDIGO DE BARRAS DETECTADO";
-              numerosLidosEl.innerText = matchBarras[0];
+              
+              spanNumsEstabilizados.innerText = matchBarras[0];
+              spanNumsAtivos.innerText = "";
+              
               contadorDigitosEl.innerText = "18 / 18";
               dicaStatusEl.innerText = "⚡ BARRAS LIDO COM SUCESSO!";
               dicaStatusEl.style.color = "#00e676";
@@ -303,7 +307,7 @@ async function loopLeituraHibrida() {
       if (processandoHU) return;
 
       // =================================================================
-      // 🏷️ PRIORIDADE 2 E 3: OCR DE TEXTO (WMS / 1789)
+      // 🏷️ PRIORIDADE 2 E 3: OCR DE TEXTO COM HUD DINÂMICO
       // =================================================================
       aplicarBinarizacaoOtsu(ctx, canvas.width, canvas.height);
 
@@ -317,7 +321,7 @@ async function loopLeituraHibrida() {
       let huEncontrada = matchOCR ? matchOCR[0] : null;
 
       if (huEncontrada && !processandoHU) {
-        processandoHU = true; // Trava o loop para enviar os dados
+        processandoHU = true;
 
         if (temWMS) {
           modoLeituraEl.innerText = "🏷️ ETIQUETA WMS DETECTADA";
@@ -327,7 +331,9 @@ async function loopLeituraHibrida() {
           dicaStatusEl.innerText = "✓ HU COMPLETA ENCONTRADA!";
         }
 
-        numerosLidosEl.innerText = huEncontrada;
+        spanNumsEstabilizados.innerText = huEncontrada;
+        spanNumsAtivos.innerText = "";
+        
         contadorDigitosEl.innerText = "18 / 18";
         dicaStatusEl.style.color = "#00e676";
 
@@ -347,13 +353,32 @@ async function loopLeituraHibrida() {
         }
 
         if (indexInicio !== -1) {
-          const parcial = textoLimpo.substring(indexInicio, indexInicio + 18);
-          numerosLidosEl.innerText = parcial;
-          contadorDigitosEl.innerText = `${parcial.length} / 18`;
-          dicaStatusEl.innerText = "👁️ Lendo sequência 1789...";
+          const parcialLida = textoLimpo.substring(indexInicio, indexInicio + 18);
+          const totalLido = parcialLida.length;
+
+          // Parte verde: os primeiros dígitos já confirmados
+          let estabilizado = parcialLida.substring(0, Math.min(4, totalLido)); // '1789'
+          let ativo = parcialLida.substring(estabilizado.length);
+
+          // Simulação de lixo digital piscando para preencher os 18 dígitos
+          let lixoSimulado = '';
+          if (totalLido < 18) {
+            const digitosFaltantes = 18 - totalLido;
+            for (let k = 0; k < digitosFaltantes; k++) {
+              lixoSimulado += Math.floor(Math.random() * 10).toString();
+            }
+          }
+
+          spanNumsEstabilizados.innerText = estabilizado;
+          spanNumsAtivos.innerText = ativo + lixoSimulado;
+
+          contadorDigitosEl.innerText = `${totalLido} / 18`;
+          dicaStatusEl.innerText = "👁️ Identificando Sequência...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
-          numerosLidosEl.innerText = "Aguardando leitura...";
+          spanNumsEstabilizados.innerText = "Aguardando";
+          spanNumsAtivos.innerText = "...";
+          
           contadorDigitosEl.innerText = "0 / 18";
           dicaStatusEl.innerText = "🟢 Enquadre a etiqueta ou código de barras";
           dicaStatusEl.style.color = "#00e676";
@@ -409,10 +434,15 @@ async function verificarHU(huCompleta) {
   }
 }
 
-// Reseta a Interface e DESTRAVA o Leitor para a Próxima Leitura
+// Reseta a Interface e DESTRAVA o Leitor
 function resetarVisor() {
   miraBox.classList.remove('sucesso');
-  numerosLidosEl.innerText = "Aguardando leitura...";
+  
+  if (spanNumsEstabilizados && spanNumsAtivos) {
+    spanNumsEstabilizados.innerText = "Aguardando";
+    spanNumsAtivos.innerText = "...";
+  }
+  
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
   dicaStatusEl.innerText = "🟢 Enquadre a etiqueta ou código de barras";
