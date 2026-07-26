@@ -1,11 +1,9 @@
-// Script.js
-
 // =================================================================
 // ⚠️ CONFIGURAÇÃO: Insira a sua URL do Google Apps Script
 // =================================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
-// Mapeamento dos elementos da tela (DOM)
+// Mapeamento dos elementos do DOM
 const video = document.getElementById('webcam');
 const miraBox = document.getElementById('mira-box');
 const numerosLidosEl = document.getElementById('numeros-lidos');
@@ -25,7 +23,7 @@ let workerOCR = null;
 let lanternaLigada = false;
 let listaPendentesGlobal = [];
 
-// Som de bip do leitor
+// Som de Bip
 function tocarBip() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -43,7 +41,7 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Controle da Lanterna do dispositivo
+// Lanterna
 async function alternarLanterna() {
   const stream = video.srcObject;
   if (!stream) return;
@@ -60,16 +58,25 @@ async function alternarLanterna() {
   } catch(e) {}
 }
 
-// Atualização da Planilha e Dashboard
+// Limpa strings de HUs para comparação sem erro
+function normalizarHU(str) {
+  return String(str || '').replace(/[^\d]/g, '').trim();
+}
+
+// Atualização do Dashboard e Quantidades
 async function atualizarDashboard() {
   try {
     const res = await fetch(SCRIPT_URL);
     const data = await res.json();
     
-    document.getElementById('qtd-encontradas').innerText = data.encontradas;
-    document.getElementById('qtd-faltam').innerText = data.pendentes;
+    // Atualiza os contadores do topo corrigindo qualquer bug numérico
+    const qtdEncontradas = parseInt(data.encontradas || 0, 10);
+    const qtdPendentes = parseInt(data.pendentes || 0, 10);
 
-    if (data.lista_pendentes) {
+    document.getElementById('qtd-encontradas').innerText = qtdEncontradas;
+    document.getElementById('qtd-faltam').innerText = qtdPendentes;
+
+    if (data.lista_pendentes && Array.isArray(data.lista_pendentes)) {
       renderizarListaPendentes(data.lista_pendentes);
     }
   } catch (e) {
@@ -77,63 +84,72 @@ async function atualizarDashboard() {
   }
 }
 
-// Desenha a lista de HUs pendentes exibindo APENAS os 5 ÚLTIMOS DÍGITOS
+// Renderiza APENAS os 5 últimos dígitos das HUs pendentes
 function renderizarListaPendentes(lista) {
-  listaPendentesGlobal = lista.map(item => String(item).trim());
+  listaPendentesGlobal = lista.map(item => normalizarHU(item)).filter(item => item.length > 0);
   badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
 
   if (listaPendentesGlobal.length === 0) {
     containerListaHus.innerHTML = `
       <div class="lista-vazia">
         <span>🎉 PARABÉNS!</span>
-        <span>Todas as HUs foram bipadas com sucesso.</span>
+        <span>Todas as HUs foram bipadas.</span>
       </div>`;
     return;
   }
 
   containerListaHus.innerHTML = listaPendentesGlobal.map(hu => {
-    const huStr = String(hu).trim();
-    // Extrai exatamente os últimos 5 dígitos da HU
-    const ultimos5 = huStr.length >= 5 ? huStr.slice(-5) : huStr;
+    // Garante que é uma HU de 18 dígitos e pega APENAS os últimos 5
+    const ultimos5 = hu.length >= 5 ? hu.slice(-5) : hu;
 
     return `
-      <div class="hu-chip" id="chip-${huStr}" data-hu="${huStr}">
+      <div class="hu-chip" data-hu="${hu}">
         <span class="sufixo">…${ultimos5}</span>
       </div>`;
   }).join('');
 }
 
-// Remove a HU da lista visual instantaneamente quando encontrada
+// Remove instantaneamente a HU da tela ao ser bipada
 function removerHuDaListaVisual(huEncontrada) {
-  const huLimpa = String(huEncontrada).trim();
+  const huLimpa = normalizarHU(huEncontrada);
   
-  // Tenta localizar o elemento pelo ID ou pelo atributo data-hu
-  let chip = document.getElementById(`chip-${huLimpa}`);
-  if (!chip) {
-    chip = document.querySelector(`[data-hu="${huLimpa}"]`);
-  }
+  // Procura o elemento na tela usando o data-attribute ou os 5 últimos dígitos
+  const ultimos5 = huLimpa.slice(-5);
+  const chips = document.querySelectorAll('.hu-chip');
+  
+  chips.forEach(chip => {
+    const huDoChip = chip.getAttribute('data-hu');
+    if (huDoChip === huLimpa || (huDoChip && huDoChip.endsWith(ultimos5))) {
+      chip.classList.add('removendo');
+      setTimeout(() => {
+        chip.remove();
+        listaPendentesGlobal = listaPendentesGlobal.filter(item => item !== huDoChip);
+        badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
 
-  if (chip) {
-    chip.classList.add('removendo');
-    setTimeout(() => {
-      chip.remove();
-      listaPendentesGlobal = listaPendentesGlobal.filter(item => item !== huLimpa);
-      badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
-      
-      if (listaPendentesGlobal.length === 0) {
-        renderizarListaPendentes([]);
-      }
-    }, 300);
-  }
+        // Atualiza os contadores na hora
+        const elFaltam = document.getElementById('qtd-faltam');
+        const elEncontradas = document.getElementById('qtd-encontradas');
+        
+        let faltam = parseInt(elFaltam.innerText || "0", 10);
+        let encontradas = parseInt(elEncontradas.innerText || "0", 10);
+        
+        if (faltam > 0) elFaltam.innerText = faltam - 1;
+        elEncontradas.innerText = encontradas + 1;
+
+        if (listaPendentesGlobal.length === 0) {
+          renderizarListaPendentes([]);
+        }
+      }, 300);
+    }
+  });
 }
 
-// Inicializa a Câmera
+// Câmera
 navigator.mediaDevices.getUserMedia({ 
   video: { 
     facingMode: "environment", 
     width: { ideal: 1920 }, 
-    height: { ideal: 1080 },
-    focusMode: "continuous"
+    height: { ideal: 1080 } 
   } 
 })
 .then(stream => {
@@ -145,18 +161,17 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicializa Tesseract OCR
+// Inicialização OCR
 async function iniciarOCR() {
-  dicaStatusEl.innerText = "⚡ Carregando Reconhecedor Otimizado...";
+  dicaStatusEl.innerText = "⚡ Carregando leitor...";
   
   workerOCR = await Tesseract.createWorker('eng');
-  
   await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789()WMSwms',
+    tessedit_char_whitelist: '0123456789',
     tessedit_pageseg_mode: '6',
   });
 
-  dicaStatusEl.innerText = "🟢 Aponte a mira para o número 1789...";
+  dicaStatusEl.innerText = "🟢 Aponte para a HU (Início 1789...)";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
@@ -206,7 +221,7 @@ function aplicarBinarizacaoOtsu(ctx, width, height) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// Loop principal de leitura da imagem
+// Loop Principal de Leitura da Câmera
 async function loopOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopOCR, 150);
@@ -232,18 +247,20 @@ async function loopOCR() {
 
       const result = await workerOCR.recognize(canvas);
       const rawText = result.data.text || "";
-
-      const REGEX_SSCC = /1789\d{14}/;
       const textoLimpo = rawText.replace(/[^\d]/g, '');
-      const match = textoLimpo.match(REGEX_SSCC);
+
+      // REGEX Rigoroso: EXIGE que comece exatamente com 1789 e tenha 18 DÍGITOS no total
+      // Isso ignora códigos de material de 6, 8, 10 ou 12 dígitos.
+      const REGEX_HU_18 = /1789\d{14}/;
+      const match = textoLimpo.match(REGEX_HU_18);
 
       let huEncontrada = match ? match[0] : null;
 
       if (huEncontrada) {
         numerosLidosEl.innerText = huEncontrada;
         contadorDigitosEl.innerText = "18 / 18";
-        modoLeituraEl.innerText = "🎯 DÍGITOS 1789 RECONHECIDOS";
-        dicaStatusEl.innerText = "✓ SSCC Confirmado!";
+        modoLeituraEl.innerText = "🎯 HU VALIDA RECONHECIDA";
+        dicaStatusEl.innerText = "✓ Confirmando HU na lista...";
         dicaStatusEl.style.color = "#00e676";
         
         miraBox.classList.remove('lendo');
@@ -257,12 +274,12 @@ async function loopOCR() {
           const parcial = textoLimpo.substring(indexInicio, indexInicio + 18);
           numerosLidosEl.innerText = parcial;
           contadorDigitosEl.innerText = `${parcial.length} / 18`;
-          dicaStatusEl.innerText = "👁️ Lendo sequência 1789...";
+          dicaStatusEl.innerText = "👁️ Lendo HU (1789...)";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           numerosLidosEl.innerText = "Aguardando 1789...";
           contadorDigitosEl.innerText = "0 / 18";
-          dicaStatusEl.innerText = "🟢 Enquadre o código de 18 dígitos";
+          dicaStatusEl.innerText = "🟢 Aponte para o código HU (18 dígitos)";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -275,7 +292,7 @@ async function loopOCR() {
   setTimeout(loopOCR, 150);
 }
 
-// Valida a HU na Planilha
+// Valida a HU lida no Google Sheets
 async function verificarHU(hu) {
   processandoHU = true;
   try {
@@ -288,32 +305,32 @@ async function verificarHU(hu) {
     if (data.status === "sucesso") {
       tocarBip();
       
-      huNotificacaoTexto.innerText = hu;
+      // Notificação e remoção visual instantânea
+      const ultimos5 = hu.slice(-5);
+      huNotificacaoTexto.innerText = `...${ultimos5} (${hu})`;
       notificacaoEl.style.display = 'block';
       
-      // Remove a HU da lista visual instantaneamente
       removerHuDaListaVisual(hu);
-      atualizarDashboard();
 
       setTimeout(() => {
         notificacaoEl.style.display = 'none';
         resetarVisor();
         processandoHU = false;
-      }, 2500);
+      }, 2000);
 
     } else if (data.status === "ja_lido") {
-      dicaStatusEl.innerText = `⚠️ HU ${hu} JÁ FOI LIDA!`;
+      dicaStatusEl.innerText = `⚠️ HU ${hu.slice(-5)} já foi lida!`;
       dicaStatusEl.style.color = "#ff9800";
-      setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
+      setTimeout(() => { resetarVisor(); processandoHU = false; }, 1800);
     } else {
-      dicaStatusEl.innerText = `❌ HU ${hu} não pertence à lista!`;
+      dicaStatusEl.innerText = `❌ HU ${hu.slice(-5)} não está na lista!`;
       dicaStatusEl.style.color = "#ff5252";
-      setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
+      setTimeout(() => { resetarVisor(); processandoHU = false; }, 1800);
     }
   } catch (e) {
-    dicaStatusEl.innerText = "❌ Erro ao conectar com a Planilha.";
+    dicaStatusEl.innerText = "❌ Erro ao conectar com o servidor.";
     dicaStatusEl.style.color = "#ff5252";
-    setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
+    setTimeout(() => { resetarVisor(); processandoHU = false; }, 1800);
   }
 }
 
@@ -322,10 +339,10 @@ function resetarVisor() {
   numerosLidosEl.innerText = "Aguardando 1789...";
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
-  dicaStatusEl.innerText = "🟢 Aponte a mira para o número 1789...";
+  dicaStatusEl.innerText = "🟢 Aponte para a HU (1789...)";
   dicaStatusEl.style.color = "#00e676";
 }
 
 // Inicialização
 atualizarDashboard();
-setInterval(atualizarDashboard, 5000);
+setInterval(atualizarDashboard, 4000);
