@@ -181,27 +181,27 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização do Tesseract OCR de Linha Rápida
+// Inicialização do Tesseract
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Inicializando leitor ultra-rápido...";
+  dicaStatusEl.innerText = "⚡ Inicializando IA de Leitura...";
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789', // Apenas números de 0 a 9
-    tessedit_pageseg_mode: '7',            // PSM 7: Trata o recorte como UMA LINHA DE TEXTO ÚNICA
+    tessedit_char_whitelist: '0123456789', // Força o leitor a reconhecer APENAS NÚMEROS
+    tessedit_pageseg_mode: '6',            // PSM 6: Trata a imagem como um bloco uniforme de texto
   });
 
-  dicaStatusEl.innerText = "🟢 Posicione o número '1789...' na mira";
+  dicaStatusEl.innerText = "🟢 Mire o número '1789...' na área marcada";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// Loop de Leitura Otimizado
+// Loop de Leitura Rápida e Limpeza de Imagem
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
-    setTimeout(loopLeituraOCR, 80);
+    setTimeout(loopLeituraOCR, 60);
     return;
   }
 
@@ -212,45 +212,52 @@ async function loopLeituraOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // 🎯 CORTE DE PRECISÃO CIRÚRGICA
-      // Pega exatamente a faixa esquerda do 1789..., pulando a palavra "SSCC" e o "ABR..."
-      const CROP_W = vw * 0.50;  // Metade esquerda
-      const CROP_H = vh * 0.15;  // Altura reduzida para pegar APENAS a linha dos números
-      const CROP_X = vw * 0.03;  // Margem esquerda
-      const CROP_Y = vh * 0.25;  // Posição vertical exata da linha do 1789
+      // 🎯 Recorte focado no bloco do número (Abaixo do WMS)
+      const CROP_W = vw * 0.70;  
+      const CROP_H = vh * 0.20;  
+      const CROP_X = vw * 0.02;  
+      const CROP_Y = vh * 0.20;  
 
       const SCALE = 2.0;
-      const PADDING = 15;
-
-      canvas.width = (CROP_W * SCALE) + (PADDING * 2);
-      canvas.height = (CROP_H * SCALE) + (PADDING * 2);
+      canvas.width = CROP_W * SCALE;
+      canvas.height = CROP_H * SCALE;
       
       const ctx = canvas.getContext('2d');
-      
-      // Fundo branco de respiro
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // 1. Desenha o recorte
       ctx.drawImage(
         video, 
         CROP_X, CROP_Y, CROP_W, CROP_H, 
-        PADDING, PADDING, CROP_W * SCALE, CROP_H * SCALE
+        0, 0, CROP_W * SCALE, CROP_H * SCALE
       );
 
-      // Reconhecimento direto pelo Tesseract
-      const result = await workerOCR.recognize(canvas);
-      const textoLimpo = extrairNumeros(result.data.text || "");
+      // 2. Limpeza Visual: Binarização Suave (Apaga linhas finas da tabela e destaca os números)
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        // Se for cinza claro/linhas da tabela -> vira Branco Puro (255)
+        // Se for número escuro -> vira Preto Puro (0)
+        const val = avg < 110 ? 0 : 255;
+        data[i] = val;
+        data[i + 1] = val;
+        data[i + 2] = val;
+      }
+      ctx.putImageData(imgData, 0, 0);
 
-      // Procura qualquer padrão que comece com 1789 e complete 18 dígitos
-      const REGEX_SSCC = /1789\d{14}/;
-      const match = textoLimpo.match(REGEX_SSCC);
+      // 3. Executa o OCR no Canvas Processado
+      const result = await workerOCR.recognize(canvas);
+      const numerosApenas = extrairNumeros(result.data.text || "");
+
+      // Expressão Regular: Procura exatamente a sequência 1789 + 14 dígitos
+      const match = numerosApenas.match(/1789\d{14}/);
 
       if (match && match[0].length === 18 && !processandoHU) {
         const huCompleta = match[0];
         processandoHU = true;
 
-        modoLeituraEl.innerText = "🔢 SSCC 18 DÍGITOS DETECTADO";
-        dicaStatusEl.innerText = "✓ LEITURA CONCLUÍDA!";
+        modoLeituraEl.innerText = "🔢 HU CONFIRMADA (18 DÍGITOS)";
+        dicaStatusEl.innerText = "✓ LEITURA SUCESSO!";
         dicaStatusEl.style.color = "#00e676";
 
         spanNumsEstabilizados.innerText = huCompleta;
@@ -264,26 +271,26 @@ async function loopLeituraOCR() {
         return;
 
       } else if (!processandoHU) {
-        const indexInicio = textoLimpo.indexOf('1789');
+        const indexInicio = numerosApenas.indexOf('1789');
 
-        modoLeituraEl.innerText = "LEITOR DIRETO: 1789... (18 DÍGITOS)";
+        modoLeituraEl.innerText = "BUSCANDO PADRÃO: 1789...";
 
         if (indexInicio !== -1) {
-          const parcialLida = textoLimpo.substring(indexInicio, indexInicio + 18);
+          const parcialLida = numerosApenas.substring(indexInicio, indexInicio + 18);
           const totalLido = parcialLida.length;
 
           spanNumsEstabilizados.innerText = parcialLida.substring(0, Math.min(4, totalLido));
           spanNumsAtivos.innerText = parcialLida.substring(4) + (totalLido < 18 ? "..." : "");
           contadorDigitosEl.innerText = `${totalLido} / 18`;
           
-          dicaStatusEl.innerText = "👁️ Lendo números 1789...";
+          dicaStatusEl.innerText = "👁️ Lendo números do código...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           spanNumsEstabilizados.innerText = "Aguardando";
           spanNumsAtivos.innerText = "...";
           contadorDigitosEl.innerText = "0 / 18";
           
-          dicaStatusEl.innerText = "🟢 Posicione o número '1789...' na mira";
+          dicaStatusEl.innerText = "🟢 Mire o número '1789...' na área marcada";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -294,7 +301,7 @@ async function loopLeituraOCR() {
   }
 
   if (!processandoHU) {
-    setTimeout(loopLeituraOCR, 80);
+    setTimeout(loopLeituraOCR, 60);
   }
 }
 
@@ -319,21 +326,21 @@ async function verificarHU(huCompleta) {
       setTimeout(() => {
         notificacaoEl.style.display = 'none';
         resetarVisor();
-      }, 1500);
+      }, 1400);
 
     } else if (data.status === "ja_lido") {
       dicaStatusEl.innerText = `⚠️ HU ${huCompleta.slice(-5)} já foi lida!`;
       dicaStatusEl.style.color = "#ff9800";
-      setTimeout(() => { resetarVisor(); }, 1500);
+      setTimeout(() => { resetarVisor(); }, 1400);
     } else {
       dicaStatusEl.innerText = `❌ HU ${huCompleta.slice(-5)} não está na lista!`;
       dicaStatusEl.style.color = "#ff5252";
-      setTimeout(() => { resetarVisor(); }, 1500);
+      setTimeout(() => { resetarVisor(); }, 1400);
     }
   } catch (e) {
     dicaStatusEl.innerText = "❌ Erro de conexão com a Planilha.";
     dicaStatusEl.style.color = "#ff5252";
-    setTimeout(() => { resetarVisor(); }, 1500);
+    setTimeout(() => { resetarVisor(); }, 1400);
   }
 }
 
@@ -347,15 +354,15 @@ function resetarVisor() {
   }
   
   contadorDigitosEl.innerText = "0 / 18";
-  modoLeituraEl.innerText = "LEITOR DIRETO: 1789... (18 DÍGITOS)";
-  dicaStatusEl.innerText = "🟢 Posicione o número '1789...' na mira";
+  modoLeituraEl.innerText = "BUSCANDO PADRÃO: 1789...";
+  dicaStatusEl.innerText = "🟢 Mire o número '1789...' na área marcada";
   dicaStatusEl.style.color = "#00e676";
   
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   processandoHU = false;
-  setTimeout(loopLeituraOCR, 150);
+  setTimeout(loopLeituraOCR, 100);
 }
 
 // Atualização Inicial do Dashboard
