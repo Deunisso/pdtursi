@@ -43,7 +43,13 @@
           <span id="modo-leitura">PADRÃO GS1: 1789... (18 DÍGITOS)</span>
           <span id="contador-digitos">0 / 18</span>
         </div>
-        <div id="numeros-lidos" class="visor-numeros">Aguardando...</div>
+        
+        <!-- Visor Dinâmico Futurista HUD -->
+        <div id="numeros-lidos" class="visor-numeros visor-vibe-futurista">
+          <span id="nums-estabilizados" class="nums-estaveis">Aguardando</span><!--
+          --><span id="nums-ativos" class="nums-piscando">...</span>
+        </div>
+
         <div id="dica-status" class="visor-status">Iniciando câmera...</div>
       </div>
     </div>
@@ -65,4 +71,3 @@
   <script src="script.js"></script>
 </body>
 </html>
-
