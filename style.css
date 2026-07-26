@@ -2,7 +2,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Segoe UI', -apple-system, Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 html, body {
@@ -13,13 +13,14 @@ html, body {
   color: #fff;
 }
 
+/* Container Principal */
 .app-container {
   position: relative;
   width: 100vw;
   height: 100vh;
 }
 
-/* Câmera em Tela Cheia */
+/* Câmera Fullscreen */
 #video-container {
   position: absolute;
   top: 0;
@@ -27,7 +28,6 @@ html, body {
   width: 100%;
   height: 100%;
   z-index: 1;
-  background: #000;
 }
 
 video {
@@ -36,97 +36,90 @@ video {
   object-fit: cover;
 }
 
-/* 1. CANTO SUPERIOR ESQUERDO: "ESCANEANDO..." COM BORDA ANIMADA */
-#modo-leitura {
+/* 🟢 TOP-ESQUERDO: "ESCANEANDO..." COM BORDA VERDE ANIMADA */
+.status-escaneando {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 20;
-  padding: 6px 14px;
-  font-size: 11px;
-  font-weight: 800;
+  top: 15px;
+  left: 15px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid #00e676;
+  border-radius: 30px;
   color: #00e676;
+  font-size: 12px;
+  font-weight: 800;
   letter-spacing: 1.5px;
-  text-transform: uppercase;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 20px;
-  border: 1px solid #00e676;
-  box-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
-  animation: bordaGiratória 2s linear infinite;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 12px rgba(0, 230, 118, 0.4);
+  animation: pulsoVerde 1.8s infinite alternate;
 }
 
-@keyframes bordaGiratória {
-  0% { box-shadow: 0 0 5px #00e676, inset 0 0 2px #00e676; }
-  50% { box-shadow: 0 0 15px #00e676, inset 0 0 8px #00e676; }
-  100% { box-shadow: 0 0 5px #00e676, inset 0 0 2px #00e676; }
+/* Ponto verde piscante ao lado do texto */
+.status-escaneando::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background-color: #00e676;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #00e676;
 }
 
-/* 2. CANTO SUPERIOR DIREITO: QUANTIDADES QUE FALTAM */
-#contador-digitos {
+@keyframes pulsoVerde {
+  0% {
+    border-color: #00e676;
+    box-shadow: 0 0 8px rgba(0, 230, 118, 0.3);
+  }
+  100% {
+    border-color: #69f0ae;
+    box-shadow: 0 0 20px rgba(0, 230, 118, 0.8);
+  }
+}
+
+/* 🟡 TOP-DIREITO: QUANTIDADES QUE FALTAM */
+.contador-box {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 20;
-  padding: 6px 14px;
+  top: 15px;
+  right: 15px;
+  z-index: 50;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 2px solid #ffd700;
+  border-radius: 12px;
+  color: #ffd700;
   font-size: 13px;
   font-weight: 900;
-  color: #ffd700;
-  background: rgba(0, 0, 0, 0.75);
-  border: 1px solid #ffd700;
-  border-radius: 8px;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
 }
 
-/* 3. EXIBIÇÃO APENAS QUANDO A HU É LIDA */
-.visor-numeros {
-  position: absolute;
-  top: 55px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  pointer-events: none;
-}
-
-.visor-vibe-futurista {
-  font-family: 'Courier New', monospace;
-  font-size: 22px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.nums-estaveis {
-  color: #00e676;
-  text-shadow: 0 0 12px rgba(0, 230, 118, 0.9);
-  background: rgba(0, 0, 0, 0.8);
-  padding: 4px 12px;
-  border-radius: 6px;
-}
-
-/* 4. PAINEL DE HUs PENDENTES EMBAIXO */
+/* 🔻 PARTE INFERIOR: PAINEL DE HUs PENDENTES */
 #painel-pendentes {
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 90px;
-  z-index: 20;
-  background: rgba(10, 10, 16, 0.85);
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(8px);
-  padding: 8px;
+  min-height: 75px;
+  max-height: 110px;
+  z-index: 50;
+  background: rgba(12, 12, 18, 0.92);
+  border-top: 2px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  padding: 10px 15px;
   display: flex;
   flex-direction: column;
+  gap: 6px;
 }
 
 .pendentes-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
-}
-
-.pendentes-header h3 {
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 700;
   color: #ff5252;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -136,27 +129,25 @@ video {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  white-space: nowrap;
   padding-bottom: 4px;
 }
 
 .hu-chip {
-  background: rgba(28, 28, 43, 0.9);
+  background: #1c1c2b;
   border: 1px solid #00d2ff;
   color: #ffd700;
   font-family: monospace;
   font-size: 13px;
   font-weight: bold;
-  padding: 4px 10px;
-  border-radius: 4px;
-  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
 }
 
-/* Oculta os elementos restantes */
+/* Ocultar elementos desnecessários */
 #canvas-processamento,
 .mira,
 #dashboard,
-.visor-status,
-.dica-status {
+.visor-numeros {
   display: none !important;
 }
