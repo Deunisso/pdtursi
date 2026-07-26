@@ -3,7 +3,7 @@
 // =================================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
-// Mapeamento dos elementos do DOM
+// Elementos do DOM
 const video = document.getElementById('webcam');
 const miraBox = document.getElementById('mira-box');
 const spanNumsEstabilizados = document.getElementById('nums-estabilizados');
@@ -18,7 +18,7 @@ const containerListaHus = document.getElementById('container-lista-hus');
 const badgeContador = document.getElementById('badge-contador');
 const canvas = document.getElementById('canvas-processamento');
 
-// Variáveis Globais
+// Controle Global
 let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
@@ -59,12 +59,10 @@ async function alternarLanterna() {
   }
 }
 
-// Extrai estritamente números
 function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// Atualização de Dashboard
 async function atualizarDashboard() {
   try {
     const res = await fetch(SCRIPT_URL);
@@ -81,7 +79,7 @@ async function atualizarDashboard() {
       renderizarListaPendentes(data.lista_pendentes);
     }
   } catch (e) {
-    console.error("Erro ao atualizar dashboard:", e);
+    console.error("Erro no dashboard:", e);
   }
 }
 
@@ -120,7 +118,11 @@ function removerHuDaListaVisual(huEncontrada) {
 
 // Câmera HD
 navigator.mediaDevices.getUserMedia({ 
-  video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
+  video: { 
+    facingMode: "environment", 
+    width: { ideal: 1920, min: 1280 }, 
+    height: { ideal: 1080, min: 720 }
+  } 
 })
 .then(stream => {
   video.srcObject = stream;
@@ -131,27 +133,26 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização Tesseract Otimizada
+// Inicialização com Leitura Estruturada por Blocos
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Inicializando IA...";
+  dicaStatusEl.innerText = "⚡ Inicializando leitor por Posição Estruturada...";
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789', // Apenas números
-    tessedit_pageseg_mode: '6',           // Trata como bloco de texto
+    tessedit_pageseg_mode: '6', // Trata o trecho como um bloco uniforme de linhas
   });
 
-  dicaStatusEl.innerText = "🟢 Alinhe os 18 dígitos do 1789 na mira";
+  dicaStatusEl.innerText = "🟢 Aponte para a etiqueta (WMS / MATERIAL)";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// Loop de Leitura com Truncagem Focada
+// Loop de Varredura por Âncora + Extração Direta
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
-    setTimeout(loopLeituraOCR, 80);
+    setTimeout(loopLeituraOCR, 60);
     return;
   }
 
@@ -162,41 +163,57 @@ async function loopLeituraOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // Recorte mais focado no meio (evita ler laterais)
-      const CROP_W = vw * 0.70;  
-      const CROP_H = vh * 0.20;  
-      const CROP_X = vw * 0.15;  
-      const CROP_Y = vh * 0.20;  
+      // Recorte amplo focado no quadrante superior/central da etiqueta
+      const CROP_W = vw * 0.85;  
+      const CROP_H = vh * 0.45;  
+      const CROP_X = vw * 0.07;  
+      const CROP_Y = vh * 0.15;  
 
       const SCALE = 2.0;
       canvas.width = CROP_W * SCALE;
       canvas.height = CROP_H * SCALE;
       
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, CROP_W * SCALE, CROP_H * SCALE);
+      ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
 
-      // Tratamento Suave em Grayscale (Sem estouro de contraste)
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imgData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        data[i] = data[i + 1] = data[i + 2] = avg; // Escala de cinza limpa
-      }
-      ctx.putImageData(imgData, 0, 0);
-
-      // Leitura Tesseract
+      // Reconhecimento completo da área recortada
       const result = await workerOCR.recognize(canvas);
-      const numerosPuros = extrairNumeros(result.data.text || "");
+      const linhas = (result.data.text || "").split('\n');
 
-      // Procura o padrão 1789 com 18 dígitos no total
-      const match = numerosPuros.match(/1789\d{14}/);
+      let huDetectada = null;
 
-      if (match && !processandoHU) {
-        const huEncontrada = match[0];
+      // ESTRATÉGIA DE BUSCA DUPLA:
+      
+      // 1. Procura por Regex Direto na Região (1789 + 14 números)
+      const textoLimpo = extrairNumeros(result.data.text || "");
+      const match1789 = textoLimpo.match(/1789\d{14}/);
+
+      if (match1789) {
+        huDetectada = match1789[0];
+      } else {
+        // 2. Busca Linha a Linha (Entre a linha WMS e a linha do MATERIAL/ABR)
+        for (let i = 0; i < linhas.length; i++) {
+          const linhaAtual = linhas[i];
+          const numerosLinha = extrairNumeros(linhaAtual);
+
+          // Se a linha começar ou contiver 1789 e tiver 18 números
+          if (numerosLinha.includes('1789') && numerosLinha.length >= 18) {
+            const idx = numerosLinha.indexOf('1789');
+            const candidato = numerosLinha.substring(idx, idx + 18);
+            if (candidato.length === 18) {
+              huDetectada = candidato;
+              break;
+            }
+          }
+        }
+      }
+
+      // Processa a validação se encontrou os 18 dígitos
+      if (huDetectada && !processandoHU) {
         processandoHU = true;
 
-        modoLeituraEl.innerText = "🔒 HU CONFIRMADA!";
-        spanNumsEstabilizados.innerText = huEncontrada;
+        modoLeituraEl.innerText = "🎯 HU ENCONTRADA (ABAIXO DO WMS)!";
+        spanNumsEstabilizados.innerText = huDetectada;
         spanNumsAtivos.innerText = "";
         contadorDigitosEl.innerText = "18 / 18";
 
@@ -206,30 +223,30 @@ async function loopLeituraOCR() {
         miraBox.classList.remove('lendo');
         miraBox.classList.add('sucesso');
 
-        await verificarHU(huEncontrada);
+        await verificarHU(huDetectada);
         return;
 
       } else {
-        const pos1789 = numerosPuros.indexOf('1789');
+        const pos1789 = textoLimpo.indexOf('1789');
 
         if (pos1789 !== -1) {
-          const parcial = numerosPuros.substring(pos1789, pos1789 + 18);
+          const parcial = textoLimpo.substring(pos1789, pos1789 + 18);
           const faltam = 18 - parcial.length;
 
           spanNumsEstabilizados.innerText = parcial;
           spanNumsAtivos.innerText = "?".repeat(Math.max(0, faltam));
           contadorDigitosEl.innerText = `${parcial.length} / 18`;
 
-          modoLeituraEl.innerText = "LENDO DÍGITOS...";
-          dicaStatusEl.innerText = "👁️ Mantenha firme na linha do 1789!";
+          modoLeituraEl.innerText = "LENDO BLOCO 1789...";
+          dicaStatusEl.innerText = "👁️ Mantenha a câmera estável!";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           spanNumsEstabilizados.innerText = "";
           spanNumsAtivos.innerText = "1789????????????";
           contadorDigitosEl.innerText = "0 / 18";
 
-          modoLeituraEl.innerText = "AGUARDANDO CÓDIGO 1789...";
-          dicaStatusEl.innerText = "🟢 Alinhe o número 1789 na mira";
+          modoLeituraEl.innerText = "MIRA NO WMS / MATERIAL";
+          dicaStatusEl.innerText = "🟢 Enquadre o bloco WMS na mira";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -240,11 +257,11 @@ async function loopLeituraOCR() {
   }
 
   if (!processandoHU) {
-    setTimeout(loopLeituraOCR, 80);
+    setTimeout(loopLeituraOCR, 60);
   }
 }
 
-// Comunicação com o Google Sheets
+// Comunicação Google Sheets
 async function verificarHU(huCompleta) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -290,8 +307,8 @@ function resetarVisor() {
   spanNumsAtivos.innerText = "1789????????????";
   
   contadorDigitosEl.innerText = "0 / 18";
-  modoLeituraEl.innerText = "AGUARDANDO CÓDIGO 1789...";
-  dicaStatusEl.innerText = "🟢 Alinhe o número 1789 na mira";
+  modoLeituraEl.innerText = "MIRA NO WMS / MATERIAL";
+  dicaStatusEl.innerText = "🟢 Enquadre o bloco WMS na mira";
   dicaStatusEl.style.color = "#00e676";
   
   const ctx = canvas.getContext('2d');
