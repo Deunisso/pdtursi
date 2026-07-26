@@ -11,7 +11,8 @@ function limparCodigoHU(textoRaw) {
 }
 
 async function iniciarAplicacao() {
-  document.getElementById('overlay-inicio').style.display = 'none';
+  const overlay = document.getElementById('overlay-inicio');
+  if (overlay) overlay.style.display = 'none';
 
   if (typeof Html5Qrcode === 'undefined') {
     exibirPainelInferior("❌ ERRO DE CARREGAMENTO", "BIBLIOTECA INDISPONÍVEL", "Recarregue a página.", "alerta");
@@ -90,14 +91,13 @@ async function onScanSuccess(decodedText) {
 
   // 🔒 TRAVA DE SEGURANÇA: Só aceita se tiver 20 dígitos E começar exatamente com "00"
   if (codigoLido.length !== 20 || !codigoLido.startsWith('00')) {
-    // Ignora silenciosamente qualquer outro código de barras ou leitura parcial na caixa
     return; 
   }
 
-  // Extrai os 18 dígitos da HU (removendo o prefixo "00") para cruzar com a planilha
+  // Extrai os 18 dígitos da HU (removendo o prefixo "00")
   const huExtraida = codigoLido.substring(2);
 
-  // Busca Inteligente: Procura na planilha tanto pelo número com "00" quanto pelos 18 dígitos
+  // Busca Inteligente na Planilha
   const itemExistente = listaHUs.find(i => {
     const huPlanilha = limparCodigoHU(String(i.hu));
     return huPlanilha === codigoLido || huPlanilha === huExtraida;
@@ -105,9 +105,9 @@ async function onScanSuccess(decodedText) {
 
   if (navigator.vibrate) navigator.vibrate(100);
 
-  // CÓDIGO GS1-128 VÁLIDO, MAS NÃO ESTÁ NA SUAS HUs PENDENTES
+  // CÓDIGO GS1-128 VÁLIDO, MAS NÃO ESTÁ NA PLANILHA
   if (!itemExistente) {
-    exibirPainelInferior("⚠️ NÃO ENCONTRADO", `(00)${huExtraida}`, "Esta HU não está na lista de conferência", "alerta");
+    exibirPainelInferior("⚠️ NÃO ENCONTRADO", `(00)${huExtraida}`, "HU fora da lista de conferência", "alerta");
     return;
   }
 
@@ -135,47 +135,55 @@ async function onScanSuccess(decodedText) {
   }
 }
 
-// Configura a câmera focando 100% no padrão CODE_128 em alta performance
+// Configura a câmera de forma simplificada e ultra-compatível
 async function iniciarCamera() {
   try {
     if (html5QrCode) {
       try { await html5QrCode.stop(); } catch(e){}
     }
 
-    html5QrCode = new Html5Qrcode("reader", {
-      formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ]
-    });
+    html5QrCode = new Html5Qrcode("reader");
 
     const config = { 
-      fps: 30, // Máxima velocidade
+      fps: 20,
       qrbox: function(viewfinderWidth, viewfinderHeight) {
-        // Mira bem larga, perfeita para enquadrar o código comprido direto
         return { 
-          width: Math.floor(viewfinderWidth * 0.92), 
+          width: Math.floor(viewfinderWidth * 0.90), 
           height: Math.floor(viewfinderHeight * 0.35) 
         };
       },
       experimentalFeatures: {
-        useBarCodeDetectorIfSupported: true // Processamento ultra-rápido por hardware
+        useBarCodeDetectorIfSupported: true
       }
     };
 
-    const videoConstraints = {
-      facingMode: "environment",
-      width: { min: 1280, ideal: 1920 },
-      height: { min: 720, ideal: 1080 },
-      focusMode: "continuous"
-    };
-
-    await html5QrCode.start(videoConstraints, config, onScanSuccess, () => {});
+    // Abre a câmera traseira padrão sem travas rígidas de resolução
+    await html5QrCode.start(
+      { facingMode: "environment" }, 
+      config, 
+      onScanSuccess, 
+      () => {}
+    );
 
   } catch (err) {
-    console.warn("Modo HD falhou, usando compatibilidade simples...", err);
+    console.warn("Tentando abrir câmera via fallback de ID...", err);
     try {
-      const configFallback = { fps: 20, qrbox: { width: 280, height: 100 } };
-      await html5QrCode.start({ facingMode: "environment" }, configFallback, onScanSuccess, () => {});
+      const devices = await Html5Qrcode.getCameras();
+      if (devices && devices.length > 0) {
+        // Pega a última câmera da lista (normalmente a câmera traseira principal)
+        const cameraId = devices[devices.length - 1].id;
+        await html5QrCode.start(
+          cameraId, 
+          { fps: 20, qrbox: { width: 280, height: 100 } }, 
+          onScanSuccess, 
+          () => {}
+        );
+      } else {
+        throw new Error("Nenhuma câmera encontrada");
+      }
     } catch (errFallback) {
-      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Permita o uso da câmera no navegador.", "alerta");
+      console.error("Erro definitivo na câmera:", errFallback);
+      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Verifique as permissões de câmera do navegador.", "alerta");
     }
   }
 }
