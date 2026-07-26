@@ -142,30 +142,32 @@ video {
   box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 25px #00e676;
 }
 
-/* Visor Interno de Leitura */
+/* Visor Interno de Leitura Semi-Transparente */
 .visor-topo {
   display: flex;
   justify-content: space-between;
   font-size: 9px;
   color: #00d2ff;
   font-weight: bold;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
 }
 
 .visor-numeros {
   font-family: 'Courier New', monospace;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
-  color: #00e676;
+  color: rgba(0, 230, 118, 0.75); /* Texto semi-transparente */
   text-align: center;
   letter-spacing: 1.5px;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.9);
-  background: rgba(0,0,0,0.85);
-  padding: 5px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  background: rgba(0, 0, 0, 0.35); /* Fundo com leve transparência (35%) */
+  backdrop-filter: blur(2px); /* Efeito de desfoque sutil no fundo */
+  padding: 4px 8px;
   border-radius: 4px;
   word-break: break-all;
   margin: auto 0;
-  border: 1px solid rgba(0,230,118,0.3);
+  border: 1px solid rgba(0, 230, 118, 0.2);
+  pointer-events: none; /* Garante que não interfere no toque */
 }
 
 .visor-status {
@@ -173,8 +175,8 @@ video {
   color: #ffd700;
   text-align: center;
   font-weight: 600;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.9);
-  background: rgba(0,0,0,0.7);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  background: rgba(0, 0, 0, 0.35); /* Fundo também semi-transparente */
   padding: 3px;
   border-radius: 4px;
 }
