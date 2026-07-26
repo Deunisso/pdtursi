@@ -13,7 +13,7 @@ html, body {
   background-color: #000;
 }
 
-/* TELA SOBREPOSTA DE INICIALIZAÇÃO */
+/* TELA DE START INICIAL */
 .overlay-start {
   position: fixed;
   top: 0;
@@ -30,46 +30,31 @@ html, body {
 
 .start-box {
   background: #222;
-  border: 2px solid #1a73e8;
-  border-radius: 16px;
-  padding: 30px 20px;
+  border: 1px solid #1a73e8;
+  border-radius: 12px;
+  padding: 25px 20px;
   text-align: center;
   color: #fff;
-  max-width: 350px;
+  max-width: 320px;
   width: 100%;
 }
 
-.start-box h2 {
-  margin-bottom: 10px;
-  color: #8ab4f8;
-}
-
-.start-box p {
-  font-size: 0.9rem;
-  color: #ccc;
-  margin-bottom: 20px;
-  line-height: 1.4;
-}
+.start-box h2 { font-size: 1.2rem; margin-bottom: 8px; color: #8ab4f8; }
+.start-box p { font-size: 0.85rem; color: #ccc; margin-bottom: 18px; }
 
 .start-box button {
   background: #1a73e8;
   color: white;
   border: none;
-  padding: 15px 30px;
-  font-size: 1rem;
+  padding: 12px 24px;
+  font-size: 0.95rem;
   font-weight: bold;
-  border-radius: 30px;
+  border-radius: 25px;
   cursor: pointer;
   width: 100%;
-  box-shadow: 0 4px 15px rgba(26, 115, 232, 0.4);
 }
 
-.start-box button:active {
-  background: #1557b0;
-  transform: scale(0.98);
-}
-
-/* Container da Câmera em Tela Cheia */
+/* CÂMERA EM TELA INTEIRA */
 .scanner-fullscreen {
   position: relative;
   width: 100vw;
@@ -77,26 +62,18 @@ html, body {
   background: #000;
 }
 
-#reader {
-  width: 100%;
-  height: 100%;
-}
+#reader { width: 100%; height: 100%; }
+#reader video { width: 100% !important; height: 100% !important; object-fit: cover !important; }
 
-#reader video {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-}
-
-/* Linha Laser Animada */
+/* LASER DISCRETO */
 .laser-line {
   position: absolute;
   top: 0;
   left: 5%;
   width: 90%;
-  height: 3px;
+  height: 2px;
   background: #ff0000;
-  box-shadow: 0 0 10px #ff0000, 0 0 15px #ff0000;
+  box-shadow: 0 0 8px #ff0000;
   animation: varredura 2s infinite ease-in-out;
   z-index: 10;
   pointer-events: none;
@@ -104,101 +81,97 @@ html, body {
 
 .scanner-fullscreen.capturado .laser-line {
   background: #00ff66;
-  box-shadow: 0 0 15px #00ff66, 0 0 25px #00ff66;
+  box-shadow: 0 0 12px #00ff66;
 }
 
-/* Miras */
+/* MIRAS NOS CANTOS DA TELA */
 .mira {
   position: absolute;
-  width: 35px;
-  height: 35px;
-  border-color: rgba(255, 255, 255, 0.7);
+  width: 25px;
+  height: 25px;
+  border-color: rgba(255, 255, 255, 0.5);
   border-style: solid;
   pointer-events: none;
   z-index: 5;
 }
-.top-left { top: 20px; left: 20px; border-width: 4px 0 0 4px; }
-.top-right { top: 20px; right: 20px; border-width: 4px 4px 0 0; }
-.bottom-left { bottom: 20px; left: 20px; border-width: 0 0 4px 4px; }
-.bottom-right { bottom: 20px; right: 20px; border-width: 0 4px 4px 0; }
+.top-left { top: 12px; left: 12px; border-width: 3px 0 0 3px; }
+.top-right { top: 12px; right: 12px; border-width: 3px 3px 0 0; }
+.bottom-left { bottom: 12px; left: 12px; border-width: 0 0 3px 3px; }
+.bottom-right { bottom: 12px; right: 12px; border-width: 0 3px 3px 0; }
 
-/* HUD PAINEL SUPERIOR */
+/* HUD TOPO COMPACTO */
 .hud-top {
   position: absolute;
-  top: 20px;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 8px;
-  width: 90%;
-  max-width: 400px;
   pointer-events: none;
 }
 
 .sync-badge {
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
-  padding: 4px 12px;
-  border-radius: 20px;
+  padding: 3px 10px;
+  border-radius: 12px;
   color: #fff;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   display: flex;
   align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  gap: 5px;
 }
 
-.dot { width: 8px; height: 8px; border-radius: 50%; background: #34a853; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: #34a853; }
 .dot.sincronizando { background: #fbbc04; animation: pulse 1s infinite; }
 .dot.erro { background: #ea4335; }
 
 .counter-box {
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
-  border: 2px solid #1a73e8;
-  border-radius: 16px;
-  padding: 10px 25px;
-  text-align: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(26, 115, 232, 0.8);
+  border-radius: 20px;
+  padding: 4px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: #fff;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
-.counter-label { display: block; font-size: 0.7rem; font-weight: bold; letter-spacing: 1px; color: #8ab4f8; }
-.counter-number { font-size: 2.2rem; font-weight: 900; color: #ffffff; line-height: 1; margin: 2px 0; }
-.counter-sub { font-size: 0.75rem; color: #bdc1c6; }
+.counter-label { font-size: 0.65rem; font-weight: bold; color: #8ab4f8; }
+.counter-number { font-size: 1.1rem; font-weight: 900; color: #ffffff; }
+.counter-sub { font-size: 0.65rem; color: #bdc1c6; }
 
-/* HUD PAINEL INFERIOR */
+/* HUD RODAPÉ FINO (PÍLULA COMPACTA) */
 .hud-bottom {
   position: absolute;
-  bottom: 25px;
+  bottom: 15px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
-  width: 90%;
-  max-width: 500px;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  padding: 15px 20px;
+  width: 92%;
+  max-width: 420px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 8px 14px;
   text-align: center;
   color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
-  box-shadow: 0 6px 25px rgba(0,0,0,0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
 }
 
-.hud-bottom.sucesso { background: rgba(20, 80, 40, 0.9); border-color: #00ff66; box-shadow: 0 0 25px rgba(0, 255, 102, 0.5); }
-.hud-bottom.alerta { background: rgba(120, 20, 20, 0.9); border-color: #ff3333; box-shadow: 0 0 25px rgba(255, 51, 51, 0.5); }
+.hud-bottom.sucesso { background: rgba(15, 60, 30, 0.85); border-color: #00ff66; }
+.hud-bottom.alerta { background: rgba(90, 15, 15, 0.85); border-color: #ff3333; }
 
-.bip-status-title { font-size: 0.8rem; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; color: #aaa; margin-bottom: 4px; }
+.bip-status-title { font-size: 0.65rem; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase; color: #aaa; }
 .hud-bottom.sucesso .bip-status-title { color: #00ff66; }
 .hud-bottom.alerta .bip-status-title { color: #ff8888; }
 
-.bip-hu-code { font-size: 1.4rem; font-weight: 900; letter-spacing: 1px; word-break: break-all; }
-.bip-detalhes { font-size: 0.85rem; color: #ddd; margin-top: 4px; }
+.bip-hu-code { font-size: 1.05rem; font-weight: 800; margin: 1px 0; }
+.bip-detalhes { font-size: 0.75rem; color: #ddd; }
 
 @keyframes varredura { 0% { top: 10%; opacity: 0.8; } 50% { top: 85%; opacity: 1; } 100% { top: 10%; opacity: 0.8; } }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
