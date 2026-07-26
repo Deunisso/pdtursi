@@ -22,16 +22,12 @@ function logNaTela(mensagem, tipo = 'normal') {
   console.log(`[${time}] ${mensagem}`);
 }
 
-// Tratador de código GS1-128 / SSCC
+// Tratamento bruto de texto: limpa caracteres especiais, parênteses (00) e prefixos GS1
 function limparCodigoHU(textoRaw) {
-  let limpo = textoRaw.replace(/[^\d]/g, '');
-  if (limpo.length === 20 && limpo.startsWith('00')) {
-    limpo = limpo.substring(2);
-  }
-  return limpo;
+  return String(textoRaw).replace(/[^\d]/g, '').trim();
 }
 
-// Efeito visual no scanner quando captura uma HU válida
+// Efeito visual no scanner quando captura uma HU válida (Piscada Verde)
 function piscarScannerSucesso() {
   const wrapper = document.getElementById('scanner-container');
   const txt = document.getElementById('scanner-text');
@@ -97,7 +93,7 @@ function renderizarLista() {
   listaHUs.forEach(item => {
     if (item.encontrado) encontrados++;
     const card = document.createElement('div');
-    card.id = `hu-${item.hu}`;
+    card.id = `hu-${limparCodigoHU(item.hu)}`;
     card.className = `hu-card ${item.encontrado ? 'encontrado' : ''}`;
     card.innerHTML = `
       <div class="hu-info">
@@ -121,42 +117,58 @@ async function onScanSuccess(decodedText) {
   if (aguardandoProcessamento) return;
 
   const codigoLido = limparCodigoHU(decodedText);
-  logNaTela(`Leitura Bruta: "${decodedText}" ➔ HU Tratada: "${codigoLido}"`, "info");
+  logNaTela(`Leitura Bruta: "${decodedText}" ➔ Limpo: "${codigoLido}"`, "info");
 
-  const itemExistente = listaHUs.find(i => String(i.hu).trim() === codigoLido);
+  // 🧠 BUSCA CORINGA: Cruza os dados independente de ter o AI (00) com 20 dígitos ou apenas os 18 dígitos
+  const itemExistente = listaHUs.find(i => {
+    const huPlanilha = limparCodigoHU(String(i.hu));
+    
+    // 1. Exatamente igual (seja 18 com 18 ou 20 com 20)
+    if (huPlanilha === codigoLido) return true;
+    
+    // 2. Lido tem 20 dígitos (com 00) e Planilha tem 18
+    if (codigoLido.length === 20 && codigoLido.startsWith('00') && huPlanilha === codigoLido.substring(2)) return true;
+    
+    // 3. Planilha tem 20 dígitos (com 00) e Lido veio com 18
+    if (huPlanilha.length === 20 && huPlanilha.startsWith('00') && codigoLido === huPlanilha.substring(2)) return true;
+
+    return false;
+  });
 
   if (navigator.vibrate) navigator.vibrate(150);
 
   if (!itemExistente) {
     mostrarFeedback(`HU ${codigoLido} não está na lista!`, false);
-    logNaTela(`ALERTA: HU ${codigoLido} não encontrada.`, "aviso");
+    logNaTela(`ALERTA: HU ${codigoLido} não encontrada na lista atual.`, "aviso");
     return;
   }
 
   if (itemExistente.encontrado) {
-    mostrarFeedback(`HU ${codigoLido} já foi bipada!`, false);
+    mostrarFeedback(`HU já foi bipada anteriormente!`, false);
     return;
   }
 
-  // Ativa o feedback visual no leitor (laser verde)
+  // Ativa o flash verde no scanner
   piscarScannerSucesso();
 
   aguardandoProcessamento = true;
   itemExistente.encontrado = true;
   renderizarLista();
   
-  const elementoHU = document.getElementById(`hu-${codigoLido}`);
+  const huId = limparCodigoHU(itemExistente.hu);
+  const elementoHU = document.getElementById(`hu-${huId}`);
   if (elementoHU) elementoHU.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-  mostrarFeedback(`HU ${codigoLido} ENCONTRADA!`, true);
+  mostrarFeedback(`HU ${huId} ENCONTRADA!`, true);
 
   try {
-    const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(codigoLido)}`;
+    // Envia para o backend o código exatamente como estava no cadastro para não dar erro de chave
+    const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(itemExistente.hu)}`;
     const response = await fetch(urlBip);
     const res = await response.json();
 
     if (res.sucesso) {
-      logNaTela(`✓ HU ${codigoLido} gravada no Sheets com sucesso!`, "normal");
+      logNaTela(`✓ HU ${itemExistente.hu} gravada com sucesso!`, "normal");
     } else {
       logNaTela(`Erro na planilha: ${res.mensagem}`, "erro");
     }
@@ -167,7 +179,7 @@ async function onScanSuccess(decodedText) {
   }
 }
 
-// Mostra notificações temporárias
+// Mostra notificações temporárias na tela
 function mostrarFeedback(texto, sucesso) {
   const fb = document.getElementById('feedback');
   fb.innerText = texto;
@@ -176,7 +188,7 @@ function mostrarFeedback(texto, sucesso) {
   setTimeout(() => { fb.style.display = 'none'; }, 3500);
 }
 
-// Configura e inicia a câmera
+// Configura e inicia a câmera com resolução máxima para ler códigos densos (GS1-128 / SSCC)
 async function iniciarCamera() {
   html5QrCode = new Html5Qrcode("reader", {
     formatsToSupport: [ 
@@ -187,21 +199,42 @@ async function iniciarCamera() {
     ]
   });
 
+  // 🚀 CONFIGURAÇÃO DE ALTA DEFINIÇÃO PARA CÓDIGOS COMPRIDOS
   const config = { 
-    fps: 20, 
-    qrbox: { width: 280, height: 80 },
+    fps: 30, // Aumentado para 30 quadros por segundo (mais agilidade)
     aspectRatio: 2.0,
+    disableFlip: false,
+    // Mira dinâmica: ocupa 88% da largura da tela para caber o código lateralmente sem cortar margens
+    qrbox: function(viewfinderWidth, viewfinderHeight) {
+      const width = Math.floor(viewfinderWidth * 0.88);
+      return { width: width, height: 90 };
+    },
     experimentalFeatures: {
-      useBarCodeDetectorIfSupported: true 
+      useBarCodeDetectorIfSupported: true // Usa o leitor de hardware nativo do Android/Chrome se disponível
     }
   };
 
+  // Pedido agressivo de hardware: Força resolução Full HD (1080p) e foco automático contínuo
+  const videoConstraints = {
+    facingMode: "environment",
+    width: { min: 1280, ideal: 1920, max: 3840 },
+    height: { min: 720, ideal: 1080, max: 2160 },
+    focusMode: "continuous"
+  };
+
   try {
-    await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
-    logNaTela("Scanner visual em modo tarja iniciado.", "normal");
+    await html5QrCode.start(videoConstraints, config, onScanSuccess, () => {});
+    logNaTela("Scanner HD ativado (otimizado para GS1-128).", "normal");
   } catch (err) {
-    logNaTela(`Erro ao iniciar câmera: ${err}`, "erro");
-    mostrarFeedback("Erro ao acessar a câmera.", false);
+    logNaTela(`Tentando fallback de câmera simples...`, "aviso");
+    try {
+      // Se o celular não aceitar o comando Full HD, tenta ligar no modo padrão
+      await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
+      logNaTela("Scanner padrão ativado.", "normal");
+    } catch (errFallback) {
+      logNaTela(`Erro ao iniciar câmera: ${errFallback}`, "erro");
+      mostrarFeedback("Erro ao acessar a câmera.", false);
+    }
   }
 }
 
