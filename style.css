@@ -1,5 +1,3 @@
-// Style.css
-
 * {
   box-sizing: border-box;
   margin: 0;
@@ -13,15 +11,22 @@ html, body {
   overflow: hidden;
   background: #0b0b10;
   color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
+/* Container Principal Centralizado */
 .app-container {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 500px; /* Limita a largura em telas maiores para manter padrão mobile */
   height: 100vh;
   padding: 8px;
   gap: 8px;
   justify-content: space-between;
+  margin: 0 auto;
 }
 
 /* Dashboard Slim */
@@ -30,6 +35,7 @@ html, body {
   justify-content: space-between;
   gap: 8px;
   height: 55px;
+  width: 100%;
   flex-shrink: 0;
 }
 
@@ -66,6 +72,7 @@ html, body {
 /* Câmera Central */
 #video-container {
   position: relative;
+  width: 100%;
   flex: 1;
   border-radius: 12px;
   overflow: hidden;
@@ -109,11 +116,12 @@ video {
   box-shadow: 0 0 10px #00d2ff;
 }
 
-/* Mira Adaptativa */
+/* Mira Adaptativa Centralizada */
 .mira {
   position: absolute;
-  top: 28%;
-  left: 4%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 92%;
   height: 38%;
   border: 2px dashed #00d2ff;
@@ -176,7 +184,8 @@ video {
   display: none;
   position: absolute;
   top: 10px;
-  left: 5%;
+  left: 50%;
+  transform: translateX(-50%);
   width: 90%;
   background: #12121a;
   border: 2px solid #00e676;
@@ -184,7 +193,7 @@ video {
   padding: 8px 12px;
   z-index: 100;
   box-shadow: 0 4px 15px rgba(0,230,118,0.4);
-  text-align: left;
+  text-align: center;
   animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -211,7 +220,8 @@ video {
   border: 1px solid #2a2a3a;
   border-radius: 10px;
   padding: 10px;
-  height: 160px;
+  height: 150px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -221,7 +231,7 @@ video {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   padding-bottom: 4px;
   border-bottom: 1px solid #222230;
 }
@@ -252,6 +262,7 @@ video {
   overflow-y: auto;
   flex: 1;
   padding-right: 2px;
+  justify-content: center;
   align-content: flex-start;
 }
 
@@ -269,6 +280,7 @@ video {
   border-radius: 6px;
   display: flex;
   align-items: center;
+  justify-content: center;
   transition: all 0.3s ease;
 }
 
@@ -277,11 +289,6 @@ video {
   opacity: 0;
   background: #00e676;
   color: #000;
-}
-
-.hu-chip .sufixo {
-  color: #ffd700;
-  font-weight: 900;
 }
 
 .lista-vazia {
@@ -298,8 +305,14 @@ video {
 }
 
 @keyframes slideDown {
-  from { transform: translateY(-30px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from { transform: translate(-50%, -30px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
 }
 
-#canvas-processamento { display: none; }
+/* Oculta o canvas completamente sem afetar o layout */
+#canvas-processamento { 
+  display: none !important;
+  position: absolute;
+  width: 0;
+  height: 0;
+}
