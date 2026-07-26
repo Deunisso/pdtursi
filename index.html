@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Leitor Ultra-Rápido SSCC (Barras + OCR)</title>
+  <title>HUD Sci-Fi SSCC Scanner</title>
 
   <!-- Leitor de Código de Barras -->
   <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -12,60 +12,112 @@
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #000; font-family: system-ui, -apple-system, sans-serif; height: 100vh; width: 100vw; overflow: hidden; color: #fff; }
+    body { background: #000; font-family: 'Courier New', Courier, monospace, system-ui; height: 100vh; width: 100vw; overflow: hidden; color: #fff; }
 
     #container { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; }
     video { width: 100%; height: 100%; object-fit: cover; }
 
-    /* Canvas invisível para processamento da IA */
+    /* Canvas invisível para IA */
     #crop-canvas { display: none; }
 
-    /* Mira de Leitura */
+    /* --- MIRA ESTILO IRON MAN --- */
     .viewport-guide {
       position: absolute;
-      top: 50%;
+      top: 42%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 94%;
+      width: 92%;
       max-width: 420px;
       height: 120px;
-      border: 3px solid #00ff66;
-      border-radius: 12px;
-      box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.65);
+      border: 2px solid #00ffcc;
+      border-radius: 8px;
+      box-shadow: 0 0 15px rgba(0, 255, 204, 0.5), inset 0 0 15px rgba(0, 255, 204, 0.2);
       pointer-events: none;
       z-index: 5;
     }
+
+    /* Detalhes nos cantos do visor estilo HUD */
+    .viewport-guide::before, .viewport-guide::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: #ff0055;
+      border-style: solid;
+    }
+    .viewport-guide::before { top: -6px; left: -6px; border-width: 3px 0 0 3px; }
+    .viewport-guide::after { bottom: -6px; right: -6px; border-width: 0 3px 3px 0; }
 
     .laser {
       position: absolute;
       width: 100%;
       height: 2px;
-      background: #ff3333;
-      box-shadow: 0 0 10px #ff3333;
+      background: #00ffcc;
+      box-shadow: 0 0 12px #00ffcc;
       top: 50%;
       animation: scan 1.2s infinite ease-in-out;
     }
 
     @keyframes scan {
-      0%, 100% { top: 10%; opacity: 0.2; }
+      0%, 100% { top: 10%; opacity: 0.3; }
       50% { top: 90%; opacity: 1; }
     }
 
-    /* Painel Inferior */
-    #status-bar {
+    /* --- PAINEL FLUTUANTE HUD (LOGO ABAIXO DO VISOR) --- */
+    #hud-display {
       position: absolute;
-      bottom: 0;
-      width: 100%;
-      background: rgba(15, 15, 15, 0.95);
-      padding: 16px;
+      top: calc(42% + 75px); /* Posicionado exatamente abaixo da caixa de mira */
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 400px;
+      background: rgba(0, 20, 30, 0.85);
+      border: 1px solid #00ffcc;
+      box-shadow: 0 0 20px rgba(0, 255, 204, 0.4);
+      border-radius: 10px;
+      padding: 12px;
       text-align: center;
       z-index: 10;
-      border-top: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(5px);
     }
 
-    .msg-status { font-size: 0.85rem; color: #ffeb3b; font-weight: 600; margin-bottom: 4px; }
-    .msg-code { font-size: 1.4rem; color: #00ff66; font-weight: bold; letter-spacing: 1px; word-break: break-all; }
-    .engine-tag { font-size: 0.75rem; color: #aaa; margin-top: 4px; }
+    .hud-title {
+      font-size: 0.7rem;
+      color: #00ffcc;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .hud-code {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #ffffff;
+      text-shadow: 0 0 10px #00ffcc, 0 0 20px #00ffcc;
+      letter-spacing: 2px;
+      word-break: break-all;
+      margin: 6px 0;
+      font-family: monospace;
+    }
+
+    .hud-status {
+      font-size: 0.75rem;
+      color: #ffeb3b;
+      font-weight: bold;
+    }
+
+    /* Efeito de flash verde no número quando detecta */
+    .detected-pulse {
+      animation: pulseGreen 0.5s ease-in-out;
+    }
+
+    @keyframes pulseGreen {
+      0% { transform: scale(1); text-shadow: 0 0 10px #00ffcc; }
+      50% { transform: scale(1.05); text-shadow: 0 0 30px #00ff00, 0 0 50px #00ff00; color: #00ff00; }
+      100% { transform: scale(1); text-shadow: 0 0 10px #00ffcc; }
+    }
   </style>
 </head>
 <body>
@@ -74,14 +126,19 @@
     <video id="video" autoplay playsinline muted></video>
     <canvas id="crop-canvas"></canvas>
     
+    <!-- Visor de Mira -->
     <div class="viewport-guide" id="guide">
       <div class="laser"></div>
     </div>
 
-    <div id="status-bar">
-      <div id="status-text" class="msg-status">⚡ Otimizando Câmera e IA...</div>
-      <div id="result-text" class="msg-code">---</div>
-      <div id="engine-text" class="engine-tag">Modo: Turbo Ativo</div>
+    <!-- HUD Flutuante Estilo Iron Man -->
+    <div id="hud-display">
+      <div class="hud-title">
+        <span>[ TARGET_DATA ]</span>
+        <span id="engine-tag">INIT...</span>
+      </div>
+      <div id="result-text" class="hud-code">(00)------------------</div>
+      <div id="status-text" class="hud-status">⚡ AGUARDANDO ALVO...</div>
     </div>
   </div>
 
@@ -91,21 +148,21 @@
     const guide = document.getElementById('guide');
     const statusText = document.getElementById('status-text');
     const resultText = document.getElementById('result-text');
-    const engineText = document.getElementById('engine-text');
+    const engineTag = document.getElementById('engine-tag');
+    const hudDisplay = document.getElementById('hud-display');
 
     let barcodeDetector = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['code_128'] }) : null;
     let ocrWorker = null;
     let isProcessingOcr = false;
     let lastFoundCode = "";
 
-    // 1. Inicialização da IA com Worker em segundo plano e whitelist rígida
     async function initOCR() {
-      engineText.innerText = "Carregando IA Turbo em Worker...";
+      engineTag.innerText = "IA_LOADING";
       ocrWorker = await Tesseract.createWorker('eng');
       await ocrWorker.setParameters({
         tessedit_char_whitelist: '0123456789()',
       });
-      engineText.innerText = "Modo: Barras + IA Binarizada (Máxima Velocidade)";
+      engineTag.innerText = "HYBRID_SYSTEM_ONLINE";
     }
 
     async function initCamera() {
@@ -121,7 +178,7 @@
         video.srcObject = stream;
         await video.play();
 
-        // 2. Controle do Hardware (Aplicação de Zoom Nível 1.8x para manter o foco)
+        // Zoom do Hardware
         const track = stream.getVideoTracks()[0];
         if (track && track.getCapabilities) {
           const capabilities = track.getCapabilities();
@@ -132,26 +189,25 @@
         }
 
         await initOCR();
-        statusText.innerText = "🔍 Posicione a etiqueta dentro da área verde";
+        statusText.innerText = "🔍 ESCANEANDO ALVO...";
 
-        // Ciclos de leitura
         scanLoop();
-        setInterval(ocrFallbackLoop, 350); // Frequência acelerada para ~350ms graças ao pré-processamento
+        setInterval(ocrFallbackLoop, 350);
 
       } catch (err) {
         console.error("Erro na câmera:", err);
-        statusText.innerText = "❌ Permissão de câmera necessária.";
+        statusText.innerText = "❌ ERRO: SEM ACESSO À CÂMERA";
       }
     }
 
-    // --- LEITURA POR BARRAS (Hardware Nativo) ---
+    // Leitura por código de barras
     async function scanLoop() {
       if (video.readyState === video.HAVE_ENOUGH_DATA && barcodeDetector) {
         try {
           const barcodes = await barcodeDetector.detect(video);
           if (barcodes.length > 0) {
             for (const barcode of barcodes) {
-              validateAndSetResult(barcode.rawValue, "Código de Barras");
+              validateAndSetResult(barcode.rawValue, "BARRAS");
             }
           }
         } catch (e) {}
@@ -159,7 +215,7 @@
       requestAnimationFrame(scanLoop);
     }
 
-    // --- LEITURA POR IA (OCR com Binarização e Downscaling) ---
+    // Leitura por IA
     async function ocrFallbackLoop() {
       if (!ocrWorker || isProcessingOcr || video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
@@ -177,7 +233,6 @@
         const cropW = guideRect.width * scaleX;
         const cropH = guideRect.height * scaleY;
 
-        // 3. Downscaling Inteligente: Limita a largura máxima a 600px para o OCR processar na hora
         const maxOcrWidth = 600;
         const ocrScale = Math.min(1, maxOcrWidth / cropW);
         
@@ -187,23 +242,20 @@
         const ctx = cropCanvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
 
-        // 4. Binarização no Canvas (Aumenta o contraste Preto/Branco Puro)
+        // Binarização
         const imgData = ctx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
         const data = imgData.data;
         for (let i = 0; i < data.length; i += 4) {
           const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
           const v = avg > 110 ? 255 : 0;
-          data[i] = v;     // R
-          data[i + 1] = v; // G
-          data[i + 2] = v; // B
+          data[i] = v; data[i + 1] = v; data[i + 2] = v;
         }
         ctx.putImageData(imgData, 0, 0);
 
-        // Processa a imagem otimizada com a IA
         const { data: { text } } = await ocrWorker.recognize(cropCanvas);
         
         if (text) {
-          validateAndSetResult(text, "IA / OCR (Números)");
+          validateAndSetResult(text, "IA / OCR");
         }
       } catch (err) {
         console.log("Erro OCR:", err);
@@ -212,7 +264,7 @@
       }
     }
 
-    // --- VALIDAÇÃO DO CÓDIGO (18 DÍGITOS DO SSCC) ---
+    // Validação e exibição
     function validateAndSetResult(rawText, metodoUsado) {
       const clean = rawText.replace(/\s+/g, '');
       const match = clean.match(/\d{18}/);
@@ -223,8 +275,13 @@
         if (lastFoundCode !== codigoFormatado) {
           lastFoundCode = codigoFormatado;
           resultText.innerText = codigoFormatado;
-          statusText.innerText = `✅ LIDO VIA: ${metodoUsado.toUpperCase()}`;
-          statusText.style.color = "#00ff66";
+          statusText.innerText = `✅ DETECTADO VIA: ${metodoUsado}`;
+          statusText.style.color = "#00ffcc";
+
+          // Efeito de pulso futurista no número lido
+          resultText.classList.remove('detected-pulse');
+          void resultText.offsetWidth; // Trigger reflow
+          resultText.classList.add('detected-pulse');
 
           if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
         }
