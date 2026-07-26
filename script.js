@@ -3,6 +3,16 @@
 // =================================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
+// Carregamento dinâmico do ZXing (Garante a biblioteca ativa sem mexer no HTML)
+(function carregarZXing() {
+  if (!window.ZXing) {
+    const script = document.createElement('script');
+    script.src = "https://unpkg.com/@zxing/library@latest";
+    script.async = true;
+    document.head.appendChild(script);
+  }
+})();
+
 // Mapeamento dos elementos do DOM
 const video = document.getElementById('webcam');
 const miraBox = document.getElementById('mira-box');
@@ -17,9 +27,11 @@ const containerListaHus = document.getElementById('container-lista-hus');
 const badgeContador = document.getElementById('badge-contador');
 const canvas = document.getElementById('canvas-processamento');
 
+// Variáveis Globais de Controle
 let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
+let codeReader = null;
 let lanternaLigada = false;
 let listaPendentesGlobal = [];
 
@@ -63,7 +75,7 @@ function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// Busca e Atualiza o Dashboard e as HUs
+// Busca e Atualiza o Dashboard e as HUs na Planilha
 async function atualizarDashboard() {
   try {
     const res = await fetch(SCRIPT_URL);
@@ -87,7 +99,7 @@ async function atualizarDashboard() {
   }
 }
 
-// Exibe na lista inferior APENAS os 5 últimos dígitos de cada HU pendente
+// Exibe na lista inferior os 5 últimos dígitos de cada HU pendente
 function renderizarListaPendentes(lista) {
   listaPendentesGlobal = lista.map(item => extrairNumeros(item)).filter(item => item.length > 0);
   
@@ -105,9 +117,7 @@ function renderizarListaPendentes(lista) {
   }
 
   containerListaHus.innerHTML = listaPendentesGlobal.map(huCompleta => {
-    // Pega exatamente os últimos 5 dígitos (ex: de '178910240423291973' exibe '91973')
     const ultimos5 = huCompleta.length >= 5 ? huCompleta.slice(-5) : huCompleta;
-
     return `
       <div class="hu-chip" data-hu="${huCompleta}">
         <span>…${ultimos5}</span>
@@ -115,7 +125,7 @@ function renderizarListaPendentes(lista) {
   }).join('');
 }
 
-// Remove o card visual do final de 5 dígitos imediatamente ao bipar
+// Remove o card visual ao bipar
 function removerHuDaListaVisual(huEncontrada) {
   const huLimpa = extrairNumeros(huEncontrada);
   const ultimos5 = huLimpa.slice(-5);
@@ -155,41 +165,7 @@ function removerHuDaListaVisual(huEncontrada) {
   });
 }
 
-// Ativa a Câmera
-navigator.mediaDevices.getUserMedia({ 
-  video: { 
-    facingMode: "environment", 
-    width: { ideal: 1920 }, 
-    height: { ideal: 1080 } 
-  } 
-})
-.then(stream => {
-  video.srcObject = stream;
-  iniciarOCR();
-})
-.catch(err => {
-  dicaStatusEl.innerText = "❌ Permita o acesso à câmera.";
-  dicaStatusEl.style.color = "#ff5252";
-});
-
-// Inicialização Tesseract OCR
-async function iniciarOCR() {
-  dicaStatusEl.innerText = "⚡ Inicializando leitor WMS/HU...";
-  
-  workerOCR = await Tesseract.createWorker('eng');
-  await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789WMSwms',
-    tessedit_pageseg_mode: '6',
-  });
-
-  dicaStatusEl.innerText = "🟢 Enquadre o número 1789 da HU";
-  dicaStatusEl.style.color = "#00e676";
-  ocrAtivo = true;
-
-  loopOCR();
-}
-
-// Filtro P&B (Otsu) para nitidez extrema do código impresso
+// Binarização Otsu para Nitidez Extrema no OCR
 function aplicarBinarizacaoOtsu(ctx, width, height) {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
@@ -232,10 +208,49 @@ function aplicarBinarizacaoOtsu(ctx, width, height) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// Loop Principal de Leitura da Câmera
-async function loopOCR() {
+// Inicializa a Câmera e os Motores de Leitura (ZXing + Tesseract)
+navigator.mediaDevices.getUserMedia({ 
+  video: { 
+    facingMode: "environment", 
+    width: { ideal: 1920 }, 
+    height: { ideal: 1080 } 
+  } 
+})
+.then(stream => {
+  video.srcObject = stream;
+  iniciarSistemaLeitura();
+})
+.catch(err => {
+  dicaStatusEl.innerText = "❌ Permita o acesso à câmera.";
+  dicaStatusEl.style.color = "#ff5252";
+});
+
+async function iniciarSistemaLeitura() {
+  dicaStatusEl.innerText = "⚡ Inicializando leitor WMS/HU...";
+  
+  // Instancia o leitor de código de barras ZXing se a lib estiver carregada
+  if (window.ZXing) {
+    codeReader = new ZXing.BrowserMultiFormatReader();
+  }
+
+  // Configura o Tesseract OCR
+  workerOCR = await Tesseract.createWorker('eng');
+  await workerOCR.setParameters({
+    tessedit_char_whitelist: '0123456789WMSwms',
+    tessedit_pageseg_mode: '6',
+  });
+
+  dicaStatusEl.innerText = "🟢 Enquadre a etiqueta WMS / 1789";
+  dicaStatusEl.style.color = "#00e676";
+  ocrAtivo = true;
+
+  loopLeituraHibrida();
+}
+
+// Loop Principal: Barras → OCR WMS + 1789 → OCR 1789 Direto
+async function loopLeituraHibrida() {
   if (!ocrAtivo || processandoHU) {
-    setTimeout(loopOCR, 150);
+    setTimeout(loopLeituraHibrida, 100);
     return;
   }
 
@@ -246,49 +261,94 @@ async function loopOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // Recorte otimizado para pegar o código impresso na etiqueta WMS
+      // Recorte otimizado abrangendo Barras, Cabeçalho WMS e Número 1789
       const CROP_W = vw * 0.90;
-      const CROP_H = vh * 0.28; // Recorte fino para não capturar letras e datas do lote
-      
+      const CROP_H = vh * 0.40; 
+      const CROP_X = vw * 0.05;
+      const CROP_Y = vh * 0.25;
+
       canvas.width = CROP_W * 2;
       canvas.height = CROP_H * 2;
       const ctx = canvas.getContext('2d');
-      
-      ctx.drawImage(video, vw * 0.05, vh * 0.36, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
+
+      // =================================================================
+      // 📊 PRIORIDADE 1: LEITURA DE CÓDIGO DE BARRAS ULTRA FINO (ZXing)
+      // =================================================================
+      if (codeReader) {
+        try {
+          const barcodeResult = await codeReader.decodeFromCanvas(canvas);
+          if (barcodeResult && barcodeResult.text) {
+            const textoBarras = barcodeResult.text.replace(/[^\d]/g, '');
+            const matchBarras = textoBarras.match(/1789\d{14}/);
+
+            if (matchBarras) {
+              modoLeituraEl.innerText = "📊 CÓDIGO DE BARRAS DETECTADO";
+              numerosLidosEl.innerText = matchBarras[0];
+              contadorDigitosEl.innerText = "18 / 18";
+              dicaStatusEl.innerText = "⚡ BARRAS LIDO COM SUCESSO!";
+              dicaStatusEl.style.color = "#00e676";
+
+              miraBox.classList.remove('lendo');
+              miraBox.classList.add('sucesso');
+              await verificarHU(matchBarras[0]);
+              return;
+            }
+          }
+        } catch (e) {
+          // Exceção normal quando não encontra código de barras no quadro
+        }
+      }
+
+      // =================================================================
+      // 🏷️ PRIORIDADE 2 E 3: OCR DE TEXTO (Tesseract + Filtro Otsu)
+      // =================================================================
       aplicarBinarizacaoOtsu(ctx, canvas.width, canvas.height);
 
       const result = await workerOCR.recognize(canvas);
       const rawText = result.data.text || "";
 
-      // Verifica se identificou etiqueta padrão WMS
       const temWMS = /WMS/i.test(rawText);
-      if (temWMS) {
-        modoLeituraEl.innerText = "🏷️ ETIQUETA WMS DETECTADA";
-      } else {
-        modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
-      }
-
-      // Isola APENAS a sequência numérica
       const textoLimpo = rawText.replace(/[^\d]/g, '');
-
-      // REGEX CRÍTICO: PROCURA OBRIGATORIAMENTE OS 18 DÍGITOS COMEÇANDO COM 1789
       const REGEX_HU_18 = /1789\d{14}/;
-      const match = textoLimpo.match(REGEX_HU_18);
+      const matchOCR = textoLimpo.match(REGEX_HU_18);
+      let huEncontrada = matchOCR ? matchOCR[0] : null;
 
-      let huEncontrada = match ? match[0] : null;
-
-      if (huEncontrada) {
+      // Opção 2: Etiqueta WMS + 18 dígitos do 1789
+      if (temWMS && huEncontrada) {
+        modoLeituraEl.innerText = "🏷️ ETIQUETA WMS DETECTADA";
         numerosLidosEl.innerText = huEncontrada;
         contadorDigitosEl.innerText = "18 / 18";
-        dicaStatusEl.innerText = "✓ HU 18 DÍGITOS VALIDADA!";
+        dicaStatusEl.innerText = "✓ WMS & HU VALIDADA!";
         dicaStatusEl.style.color = "#00e676";
-        
+
         miraBox.classList.remove('lendo');
         miraBox.classList.add('sucesso');
-        
         await verificarHU(huEncontrada);
+        return;
+
+      // Opção 3: Leitura direta do 1789 (Fallback se o WMS falhar/estiver ilegível)
+      } else if (huEncontrada) {
+        modoLeituraEl.innerText = "🔢 LEITURA DIRETA (1789)";
+        numerosLidosEl.innerText = huEncontrada;
+        contadorDigitosEl.innerText = "18 / 18";
+        dicaStatusEl.innerText = "✓ HU COMPLETA ENCONTRADA!";
+        dicaStatusEl.style.color = "#00e676";
+
+        miraBox.classList.remove('lendo');
+        miraBox.classList.add('sucesso');
+        await verificarHU(huEncontrada);
+        return;
+
+      // Estado Parcial / Aguardando Enquadramento
       } else {
         const indexInicio = textoLimpo.indexOf('1789');
+
+        if (temWMS) {
+          modoLeituraEl.innerText = "🏷️ WMS DETECTADO - Buscando 1789...";
+        } else {
+          modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
+        }
 
         if (indexInicio !== -1) {
           const parcial = textoLimpo.substring(indexInicio, indexInicio + 18);
@@ -297,9 +357,9 @@ async function loopOCR() {
           dicaStatusEl.innerText = "👁️ Lendo sequência 1789...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
-          numerosLidosEl.innerText = "Aguardando 1789...";
+          numerosLidosEl.innerText = "Aguardando leitura...";
           contadorDigitosEl.innerText = "0 / 18";
-          dicaStatusEl.innerText = "🟢 Posicione a linha 1789 na mira";
+          dicaStatusEl.innerText = "🟢 Enquadre a etiqueta ou código de barras";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -309,10 +369,10 @@ async function loopOCR() {
     console.error(e);
   }
 
-  setTimeout(loopOCR, 150);
+  setTimeout(loopLeituraHibrida, 100);
 }
 
-// Envia a HU completa de 18 dígitos para a planilha
+// Envia a HU para a Planilha Google Apps Script
 async function verificarHU(huCompleta) {
   processandoHU = true;
   try {
@@ -355,13 +415,13 @@ async function verificarHU(huCompleta) {
 
 function resetarVisor() {
   miraBox.classList.remove('sucesso');
-  numerosLidosEl.innerText = "Aguardando 1789...";
+  numerosLidosEl.innerText = "Aguardando leitura...";
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
-  dicaStatusEl.innerText = "🟢 Posicione a linha 1789 na mira";
+  dicaStatusEl.innerText = "🟢 Enquadre a etiqueta ou código de barras";
   dicaStatusEl.style.color = "#00e676";
 }
 
-// Inicialização
+// Inicializações de Segundo Plano
 atualizarDashboard();
 setInterval(atualizarDashboard, 5000);
