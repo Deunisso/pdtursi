@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Leitor Retrato SSCC (Barras + OCR)</title>
+  <title>Leitor Ultra-Rápido SSCC (Barras + OCR)</title>
 
   <!-- Leitor de Código de Barras -->
   <script src="https://unpkg.com/@zxing/library@latest"></script>
@@ -17,10 +17,10 @@
     #container { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; }
     video { width: 100%; height: 100%; object-fit: cover; }
 
-    /* Canvas para processamento de IA */
+    /* Canvas invisível para processamento da IA */
     #crop-canvas { display: none; }
 
-    /* Mira Otimizada para Modo Retrato */
+    /* Mira de Leitura */
     .viewport-guide {
       position: absolute;
       top: 50%;
@@ -43,7 +43,7 @@
       background: #ff3333;
       box-shadow: 0 0 10px #ff3333;
       top: 50%;
-      animation: scan 1.5s infinite ease-in-out;
+      animation: scan 1.2s infinite ease-in-out;
     }
 
     @keyframes scan {
@@ -79,9 +79,9 @@
     </div>
 
     <div id="status-bar">
-      <div id="status-text" class="msg-status">📱 Modo Retrato Ativo. Aguardando câmera...</div>
+      <div id="status-text" class="msg-status">⚡ Otimizando Câmera e IA...</div>
       <div id="result-text" class="msg-code">---</div>
-      <div id="engine-text" class="engine-tag">Modo Híbrido: Barras + OCR</div>
+      <div id="engine-text" class="engine-tag">Modo: Turbo Ativo</div>
     </div>
   </div>
 
@@ -98,14 +98,14 @@
     let isProcessingOcr = false;
     let lastFoundCode = "";
 
-    // Inicializa a IA Tesseract (apenas para números)
+    // 1. Inicialização da IA com Worker em segundo plano e whitelist rígida
     async function initOCR() {
-      engineText.innerText = "Carregando IA em modo retrato...";
+      engineText.innerText = "Carregando IA Turbo em Worker...";
       ocrWorker = await Tesseract.createWorker('eng');
       await ocrWorker.setParameters({
         tessedit_char_whitelist: '0123456789()',
       });
-      engineText.innerText = "Modo Retrato: Barras + IA Ativo";
+      engineText.innerText = "Modo: Barras + IA Binarizada (Máxima Velocidade)";
     }
 
     async function initCamera() {
@@ -121,12 +121,22 @@
         video.srcObject = stream;
         await video.play();
 
-        await initOCR();
-        statusText.innerText = "🔍 Enquadre o código na caixa verde";
+        // 2. Controle do Hardware (Aplicação de Zoom Nível 1.8x para manter o foco)
+        const track = stream.getVideoTracks()[0];
+        if (track && track.getCapabilities) {
+          const capabilities = track.getCapabilities();
+          if (capabilities.zoom) {
+            const targetZoom = Math.min(1.8, capabilities.zoom.max);
+            track.applyConstraints({ advanced: [{ zoom: targetZoom }] }).catch(() => {});
+          }
+        }
 
-        // Ciclos de Leitura
+        await initOCR();
+        statusText.innerText = "🔍 Posicione a etiqueta dentro da área verde";
+
+        // Ciclos de leitura
         scanLoop();
-        setInterval(ocrFallbackLoop, 700);
+        setInterval(ocrFallbackLoop, 350); // Frequência acelerada para ~350ms graças ao pré-processamento
 
       } catch (err) {
         console.error("Erro na câmera:", err);
@@ -149,14 +159,13 @@
       requestAnimationFrame(scanLoop);
     }
 
-    // --- LEITURA POR IA (OCR Dinâmico em Retrato) ---
+    // --- LEITURA POR IA (OCR com Binarização e Downscaling) ---
     async function ocrFallbackLoop() {
       if (!ocrWorker || isProcessingOcr || video.readyState !== video.HAVE_ENOUGH_DATA) return;
 
       isProcessingOcr = true;
 
       try {
-        // Calcula a posição exata da mira em relação à resolução real do vídeo
         const videoRect = video.getBoundingClientRect();
         const guideRect = guide.getBoundingClientRect();
 
@@ -168,14 +177,29 @@
         const cropW = guideRect.width * scaleX;
         const cropH = guideRect.height * scaleY;
 
-        // Ajusta o canvas de recorte
-        cropCanvas.width = cropW;
-        cropCanvas.height = cropH;
+        // 3. Downscaling Inteligente: Limita a largura máxima a 600px para o OCR processar na hora
+        const maxOcrWidth = 600;
+        const ocrScale = Math.min(1, maxOcrWidth / cropW);
+        
+        cropCanvas.width = cropW * ocrScale;
+        cropCanvas.height = cropH * ocrScale;
 
-        const ctx = cropCanvas.getContext('2d');
-        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+        const ctx = cropCanvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
 
-        // Processa o recorte com a IA
+        // 4. Binarização no Canvas (Aumenta o contraste Preto/Branco Puro)
+        const imgData = ctx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
+        const data = imgData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          const v = avg > 110 ? 255 : 0;
+          data[i] = v;     // R
+          data[i + 1] = v; // G
+          data[i + 2] = v; // B
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        // Processa a imagem otimizada com a IA
         const { data: { text } } = await ocrWorker.recognize(cropCanvas);
         
         if (text) {
