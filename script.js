@@ -1,19 +1,22 @@
-// ⚠️ URL DO SEU GOOGLE APPS SCRIPT
+// ⚠️ COLE AQUI A URL DO SEU GOOGLE APPS SCRIPT
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
 let listaHUs = [];
 let html5QrCode;
 let aguardandoProcessamento = false;
 
-// Remove caracteres especiais deixando apenas os dígitos do código
 function limparCodigoHU(textoRaw) {
   return String(textoRaw).replace(/[^\d]/g, '').trim();
 }
 
-async function inicializar() {
-  // Verificação de HTTPS antes de tentar ligar a câmera
-  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    exibirPainelInferior("⚠️ ERRO DE SEGURANÇA", "HTTPS NECESSÁRIO", "A câmera exige endereço HTTPS para funcionar (ex: GitHub Pages/Vercel).", "alerta");
+// Disparado ao clicar no botão "LIGAR CÂMERA"
+async function iniciarAplicacao() {
+  document.getElementById('overlay-inicio').style.display = 'none';
+
+  // Verifica se a biblioteca html5-qrcode carregou corretamente
+  if (typeof Html5Qrcode === 'undefined') {
+    exibirPainelInferior("❌ ERRO DE CARREGAMENTO", "BIBLIOTECA INDISPONÍVEL", "Recarregue a página. O script da câmera não baixou.", "alerta");
+    return;
   }
 
   await carregarDadosSilenciosamente();
@@ -23,7 +26,7 @@ async function inicializar() {
   setInterval(carregarDadosSilenciosamente, 10000);
 }
 
-// Busca a lista para calcular quantos faltam
+// Busca a lista na Planilha do Google
 async function carregarDadosSilenciosamente() {
   if (aguardandoProcessamento) return;
   const dot = document.getElementById('sync-dot');
@@ -34,9 +37,7 @@ async function carregarDadosSilenciosamente() {
     const urlBusca = `${APPS_SCRIPT_URL}?action=obterLista`;
     const response = await fetch(urlBusca);
     
-    if (!response.ok) {
-      throw new Error(`Erro HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
     const dados = await response.json();
     if (Array.isArray(dados)) {
@@ -45,16 +46,15 @@ async function carregarDadosSilenciosamente() {
       if (dot) dot.className = "dot";
       if (texto) texto.innerText = "Sincronizado";
     } else {
-      throw new Error("Resposta da planilha não é uma lista válida.");
+      throw new Error("Formato inválido retornado pelo Apps Script.");
     }
   } catch (err) {
-    console.error("Erro na sincronização:", err);
+    console.error("Erro Apps Script:", err);
     if (dot) dot.className = "dot erro";
-    if (texto) texto.innerText = "Offline (Erro no Link do Script)";
+    if (texto) texto.innerText = "Offline (Erro Apps Script)";
   }
 }
 
-// Atualiza o contador flutuante do topo da tela
 function atualizarContadores() {
   if (!Array.isArray(listaHUs)) return;
 
@@ -69,7 +69,6 @@ function atualizarContadores() {
   if (elTotal) elTotal.innerText = `de ${total} itens pendentes`;
 }
 
-// Atualiza o painel HUD inferior com a informação da última HU bipada
 function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   const card = document.getElementById('card-ultimo-bip');
   const elTitulo = document.getElementById('bip-status-title');
@@ -81,7 +80,6 @@ function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   if (elCodigo) elCodigo.innerText = codigo;
   if (elDetalhes) elDetalhes.innerText = detalhes;
 
-  // Animação de flash no laser
   const wrapper = document.getElementById('scanner-container');
   if (wrapper) {
     wrapper.classList.add('capturado');
@@ -89,7 +87,6 @@ function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   }
 }
 
-// Leitura do Código de Barras
 async function onScanSuccess(decodedText) {
   if (aguardandoProcessamento) return;
 
@@ -106,33 +103,27 @@ async function onScanSuccess(decodedText) {
 
   if (navigator.vibrate) navigator.vibrate(150);
 
-  // CÓDIGO NÃO EXISTE NA PLANILHA
   if (!itemExistente) {
     exibirPainelInferior("⚠️ CÓDIGO NÃO ENCONTRADO", codigoLido, "Esta HU não pertence a esta lista!", "alerta");
     return;
   }
 
-  // CÓDIGO JÁ FOI BIPADO
   if (itemExistente.encontrado) {
     exibirPainelInferior("⚠️ HU JÁ BIPADA", itemExistente.hu, `Posição: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "alerta");
     return;
   }
 
-  // SUCESSO: HU ENCONTRADA E PENDENTE
   aguardandoProcessamento = true;
   itemExistente.encontrado = true;
   
-  // Atualiza instantaneamente a contagem na tela
   atualizarContadores();
-  
   exibirPainelInferior("⚡ HU BIPADA COM SUCESSO!", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "sucesso");
 
-  // Envia a confirmação para a Planilha do Google
   try {
     const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(itemExistente.hu)}`;
     await fetch(urlBip);
   } catch (err) {
-    console.error("Erro ao salvar no Sheets:", err);
+    console.error("Erro ao gravar no Sheets:", err);
   } finally {
     aguardandoProcessamento = false;
   }
@@ -150,11 +141,10 @@ async function iniciarCamera() {
         const width = Math.floor(viewfinderWidth * 0.85);
         const height = Math.floor(viewfinderHeight * 0.45);
         return { width: width, height: height };
-      },
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      }
     };
 
-    // Tenta abrir a câmera traseira de modo simples universal
+    // Tenta iniciar câmera traseira
     await html5QrCode.start(
       { facingMode: "environment" }, 
       config, 
@@ -163,27 +153,25 @@ async function iniciarCamera() {
     );
 
   } catch (err) {
-    console.warn("Tentando fallback por ID de dispositivo de câmera...", err);
+    console.warn("Tentando fallback de câmera simples...", err);
     
-    // Fallback: Busca a lista física de câmeras do celular e pega a principal
     try {
+      // Fallback: Busca a lista de câmeras físicas do aparelho e usa a traseira
       const devices = await Html5Qrcode.getCameras();
       if (devices && devices.length > 0) {
-        const cameraId = devices[devices.length - 1].id; // Pega a última câmera (traseira)
+        const cameraId = devices[devices.length - 1].id;
         await html5QrCode.start(cameraId, { fps: 20 }, onScanSuccess, () => {});
       } else {
-        throw new Error("Nenhuma câmera encontrada no dispositivo.");
+        throw new Error("Nenhuma câmera encontrada.");
       }
     } catch (errFallback) {
-      console.error("Erro final na câmera:", errFallback);
+      console.error("Erro crítico na câmera:", errFallback);
       exibirPainelInferior(
-        "❌ ERRO NA CÂMERA", 
-        "SEM PERMISSÃO OU SEM HTTPS", 
-        "Permita o acesso à câmera no navegador ou rode o site via HTTPS.", 
+        "❌ PERMISSÃO NEGADA", 
+        "SEM ACESSO À CÂMERA", 
+        "Permita o uso da câmera nas configurações do navegador do seu celular.", 
         "alerta"
       );
     }
   }
 }
-
-window.addEventListener('DOMContentLoaded', inicializar);
