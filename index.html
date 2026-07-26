@@ -3,70 +3,46 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>PDTursi</title>
+  <title>PDTursi - Scanner WMS</title>
+  
+  <!-- Biblioteca Tesseract para OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <div class="app-container">
-    <!-- Dashboard Slim -->
-    <div id="dashboard">
-      <div class="card found">
-        <p>Encontradas</p>
-        <h2 id="qtd-encontradas">-</h2>
-      </div>
-      <div class="card missing">
-        <p>Faltam</p>
-        <h2 id="qtd-faltam">-</h2>
-      </div>
-    </div>
-
-    <!-- Câmera com Leitura Inteligente -->
+    <!-- Câmera em Tela Cheia -->
     <div id="video-container">
-      <video id="webcam" autoplay playsinline></video>
-      
-      <!-- Botão de Lanterna -->
-      <button id="btn-lanterna" onclick="alternarLanterna()">
-        <span>💡</span> Lanterna
-      </button>
-
-      <!-- Pop-up de Notificação -->
-      <div id="notificacao-discreta">
-        <div class="titulo">✓ HU Registrada na Planilha</div>
-        <div id="hu-notificacao-texto" class="hu-codigo">000000000000000000</div>
-      </div>
-
-      <!-- Mira Adaptativa -->
-      <div id="mira-box" class="mira">
-        <div class="visor-topo">
-          <span id="modo-leitura">PADRÃO GS1: 1789... (18 DÍGITOS)</span>
-          <span id="contador-digitos">0 / 18</span>
-        </div>
-        
-        <!-- Visor Dinâmico Futurista HUD -->
-        <div id="numeros-lidos" class="visor-numeros visor-vibe-futurista">
-          <span id="nums-estabilizados" class="nums-estaveis">Aguardando</span><!--
-          --><span id="nums-ativos" class="nums-piscando">...</span>
-        </div>
-
-        <div id="dica-status" class="visor-status">Iniciando câmera...</div>
-      </div>
+      <video id="webcam" autoplay playsinline muted></video>
+      <canvas id="canvas-processamento"></canvas>
     </div>
 
-    <!-- Lista de HUs Pendentes -->
+    <!-- Canto Superior Esquerdo: Status da Leitura com Borda Neon -->
+    <div id="modo-leitura" class="status-escaneando">ESCANEANDO...</div>
+
+    <!-- Canto Superior Direito: Quantidades Restantes -->
+    <div class="contador-box">
+      <span id="contador-digitos">0 RESTANTES</span>
+    </div>
+
+    <!-- Elementos ocultos/invisíveis usados pelo JavaScript (para evitar erros de referência) -->
+    <div class="visor-numeros" style="display: none;">
+      <span id="nums-estabilizados"></span>
+      <span id="nums-ativos"></span>
+    </div>
+
+    <!-- Painel Inferior: HUs Pendentes -->
     <div id="painel-pendentes">
       <div class="pendentes-header">
-        <h3>⏳ HUs Pendentes</h3>
-        <span id="badge-contador">0 RESTANTES</span>
+        <span>⌛ HUS PENDENTES</span>
       </div>
       <div id="container-lista-hus" class="lista-hus">
-        <div class="lista-vazia">Carregando lista de HUs...</div>
+        <!-- Chips das HUs serão gerados dinamicamente via JS -->
       </div>
     </div>
   </div>
-
-  <canvas id="canvas-processamento"></canvas>
 
   <script src="script.js"></script>
 </body>
