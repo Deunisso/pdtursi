@@ -2,11 +2,10 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
 let listaHUs = [];
-let tamanhosValidosHUs = new Set(); // Guarda dinamicamente os tamanhos das suas HUs
 let html5QrCode;
 let aguardandoProcessamento = false;
 
-// Remove caracteres não numéricos
+// Remove caracteres especiais e parênteses, deixando apenas os números
 function limparCodigoHU(textoRaw) {
   return String(textoRaw).replace(/[^\d]/g, '').trim();
 }
@@ -22,11 +21,11 @@ async function iniciarAplicacao() {
   await carregarDadosSilenciosamente();
   iniciarCamera();
 
-  // Sincroniza a cada 10 segundos
+  // Sincroniza a cada 10 segundos com a planilha
   setInterval(carregarDadosSilenciosamente, 10000);
 }
 
-// Busca a lista na Planilha do Google e identifica o tamanho dos códigos
+// Busca a lista na Planilha do Google
 async function carregarDadosSilenciosamente() {
   if (aguardandoProcessamento) return;
   const dot = document.getElementById('sync-dot');
@@ -41,17 +40,6 @@ async function carregarDadosSilenciosamente() {
     const dados = await response.json();
     if (Array.isArray(dados)) {
       listaHUs = dados;
-      
-      // Mapeia automaticamente o tamanho das HUs cadastradas na planilha
-      tamanhosValidosHUs.clear();
-      listaHUs.forEach(item => {
-        const limpo = limparCodigoHU(item.hu);
-        if (limpo.length > 0) {
-          tamanhosValidosHUs.add(limpo.length);
-          tamanhosValidosHUs.add(limpo.length + 2); // Permite variação com prefixo "00"
-        }
-      });
-
       atualizarContadores();
       if (dot) dot.className = "dot";
       if (texto) texto.innerText = "OK";
@@ -94,48 +82,49 @@ function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   }
 }
 
-// Leitura do Código de Barras
+// 🎯 LEITURA RÍGIDA: APENAS CÓDIGOS GS1-128 QUE INICIAM COM (00)
 async function onScanSuccess(decodedText) {
   if (aguardandoProcessamento) return;
 
   const codigoLido = limparCodigoHU(decodedText);
 
-  // Ignora ruídos rápidos de câmera com menos de 6 dígitos
-  if (codigoLido.length < 6) return;
-
-  // Se a planilha já carregou, valida se o código lido tem o tamanho exato dos códigos da planilha
-  if (tamanhosValidosHUs.size > 0 && !tamanhosValidosHUs.has(codigoLido.length)) {
-    console.warn(`Leitura parcial/inválida ignorada: ${codigoLido} (${codigoLido.length} dígitos)`);
-    return; // Descarta leituras cortadas e continua lendo
+  // 🔒 TRAVA DE SEGURANÇA: Só aceita se tiver 20 dígitos E começar exatamente com "00"
+  if (codigoLido.length !== 20 || !codigoLido.startsWith('00')) {
+    // Ignora silenciosamente qualquer outro código de barras ou leitura parcial na caixa
+    return; 
   }
 
-  // Busca Inteligente na Lista
+  // Extrai os 18 dígitos da HU (removendo o prefixo "00") para cruzar com a planilha
+  const huExtraida = codigoLido.substring(2);
+
+  // Busca Inteligente: Procura na planilha tanto pelo número com "00" quanto pelos 18 dígitos
   const itemExistente = listaHUs.find(i => {
     const huPlanilha = limparCodigoHU(String(i.hu));
-    if (huPlanilha === codigoLido) return true;
-    if (codigoLido.length === huPlanilha.length + 2 && codigoLido.startsWith('00') && codigoLido.endsWith(huPlanilha)) return true;
-    if (huPlanilha.length === codigoLido.length + 2 && huPlanilha.startsWith('00') && huPlanilha.endsWith(codigoLido)) return true;
-    return false;
+    return huPlanilha === codigoLido || huPlanilha === huExtraida;
   });
 
   if (navigator.vibrate) navigator.vibrate(100);
 
+  // CÓDIGO GS1-128 VÁLIDO, MAS NÃO ESTÁ NA SUAS HUs PENDENTES
   if (!itemExistente) {
-    exibirPainelInferior("⚠️ NÃO ENCONTRADO", codigoLido, "HU fora da lista de conferência", "alerta");
+    exibirPainelInferior("⚠️ NÃO ENCONTRADO", `(00)${huExtraida}`, "Esta HU não está na lista de conferência", "alerta");
     return;
   }
 
+  // CÓDIGO JÁ BIPADO
   if (itemExistente.encontrado) {
     exibirPainelInferior("⚠️ JÁ BIPADA", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "alerta");
     return;
   }
 
+  // SUCESSO: HU ENCONTRADA!
   aguardandoProcessamento = true;
   itemExistente.encontrado = true;
   
   atualizarContadores();
   exibirPainelInferior("⚡ HU BIPADA!", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "sucesso");
 
+  // Envia a baixa para a planilha
   try {
     const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(itemExistente.hu)}`;
     await fetch(urlBip);
@@ -146,42 +135,46 @@ async function onScanSuccess(decodedText) {
   }
 }
 
-// Inicia a câmera com estabilidade universal
+// Configura a câmera focando 100% no padrão CODE_128 em alta performance
 async function iniciarCamera() {
   try {
     if (html5QrCode) {
       try { await html5QrCode.stop(); } catch(e){}
     }
 
-    html5QrCode = new Html5Qrcode("reader");
+    html5QrCode = new Html5Qrcode("reader", {
+      formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ]
+    });
 
     const config = { 
-      fps: 20,
+      fps: 30, // Máxima velocidade
       qrbox: function(viewfinderWidth, viewfinderHeight) {
-        // Caixas de leitura largas ideais para etiquetas de galpão
-        const width = Math.floor(viewfinderWidth * 0.90);
-        const height = Math.floor(viewfinderHeight * 0.40);
-        return { width: width, height: height };
+        // Mira bem larga, perfeita para enquadrar o código comprido direto
+        return { 
+          width: Math.floor(viewfinderWidth * 0.92), 
+          height: Math.floor(viewfinderHeight * 0.35) 
+        };
+      },
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true // Processamento ultra-rápido por hardware
       }
     };
 
-    await html5QrCode.start(
-      { facingMode: "environment" }, 
-      config, 
-      onScanSuccess, 
-      () => {}
-    );
+    const videoConstraints = {
+      facingMode: "environment",
+      width: { min: 1280, ideal: 1920 },
+      height: { min: 720, ideal: 1080 },
+      focusMode: "continuous"
+    };
+
+    await html5QrCode.start(videoConstraints, config, onScanSuccess, () => {});
 
   } catch (err) {
-    console.warn("Tentando fallback de câmera...", err);
+    console.warn("Modo HD falhou, usando compatibilidade simples...", err);
     try {
-      const devices = await Html5Qrcode.getCameras();
-      if (devices && devices.length > 0) {
-        const cameraId = devices[devices.length - 1].id;
-        await html5QrCode.start(cameraId, { fps: 20 }, onScanSuccess, () => {});
-      }
+      const configFallback = { fps: 20, qrbox: { width: 280, height: 100 } };
+      await html5QrCode.start({ facingMode: "environment" }, configFallback, onScanSuccess, () => {});
     } catch (errFallback) {
-      console.error("Erro ao abrir câmera:", errFallback);
       exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Permita o uso da câmera no navegador.", "alerta");
     }
   }
