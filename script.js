@@ -133,26 +133,26 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização com Leitura Estruturada por Blocos
+// Inicialização Sem Trava de Whitelist (Permite leitura natural de longe)
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Inicializando leitor por Posição Estruturada...";
+  dicaStatusEl.innerText = "⚡ Modo Longa Distância Ativado...";
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_pageseg_mode: '6', // Trata o trecho como um bloco uniforme de linhas
+    tessedit_pageseg_mode: '11', // PSM 11: Detecta textos soltos de longe sem se perder na estrutura da tabela
   });
 
-  dicaStatusEl.innerText = "🟢 Aponte para a etiqueta (WMS / MATERIAL)";
+  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta (Qualquer distância)";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// Loop de Varredura por Âncora + Extração Direta
+// Loop com Ampla Visão
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
-    setTimeout(loopLeituraOCR, 60);
+    setTimeout(loopLeituraOCR, 80);
     return;
   }
 
@@ -163,57 +163,32 @@ async function loopLeituraOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // Recorte amplo focado no quadrante superior/central da etiqueta
-      const CROP_W = vw * 0.85;  
-      const CROP_H = vh * 0.45;  
-      const CROP_X = vw * 0.07;  
+      // Captura ampla para ler mesmo se a etiqueta estiver pequena/distante
+      const CROP_W = vw * 0.90;  
+      const CROP_H = vh * 0.70;  
+      const CROP_X = vw * 0.05;  
       const CROP_Y = vh * 0.15;  
 
-      const SCALE = 2.0;
-      canvas.width = CROP_W * SCALE;
-      canvas.height = CROP_H * SCALE;
+      canvas.width = CROP_W;
+      canvas.height = CROP_H;
       
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
 
-      // Reconhecimento completo da área recortada
+      // Leitura nativa
       const result = await workerOCR.recognize(canvas);
-      const linhas = (result.data.text || "").split('\n');
+      const textoBruto = result.data.text || "";
+      const numerosPuros = extrairNumeros(textoBruto);
 
-      let huDetectada = null;
+      // PROCURA O PADRÃO: 1789 + 14 números (Total 18)
+      const match = numerosPuros.match(/1789\d{14}/);
 
-      // ESTRATÉGIA DE BUSCA DUPLA:
-      
-      // 1. Procura por Regex Direto na Região (1789 + 14 números)
-      const textoLimpo = extrairNumeros(result.data.text || "");
-      const match1789 = textoLimpo.match(/1789\d{14}/);
-
-      if (match1789) {
-        huDetectada = match1789[0];
-      } else {
-        // 2. Busca Linha a Linha (Entre a linha WMS e a linha do MATERIAL/ABR)
-        for (let i = 0; i < linhas.length; i++) {
-          const linhaAtual = linhas[i];
-          const numerosLinha = extrairNumeros(linhaAtual);
-
-          // Se a linha começar ou contiver 1789 e tiver 18 números
-          if (numerosLinha.includes('1789') && numerosLinha.length >= 18) {
-            const idx = numerosLinha.indexOf('1789');
-            const candidato = numerosLinha.substring(idx, idx + 18);
-            if (candidato.length === 18) {
-              huDetectada = candidato;
-              break;
-            }
-          }
-        }
-      }
-
-      // Processa a validação se encontrou os 18 dígitos
-      if (huDetectada && !processandoHU) {
+      if (match && !processandoHU) {
+        const huEncontrada = match[0];
         processandoHU = true;
 
-        modoLeituraEl.innerText = "🎯 HU ENCONTRADA (ABAIXO DO WMS)!";
-        spanNumsEstabilizados.innerText = huDetectada;
+        modoLeituraEl.innerText = "🔒 HU LIDA COM SUCESSO!";
+        spanNumsEstabilizados.innerText = huEncontrada;
         spanNumsAtivos.innerText = "";
         contadorDigitosEl.innerText = "18 / 18";
 
@@ -223,30 +198,30 @@ async function loopLeituraOCR() {
         miraBox.classList.remove('lendo');
         miraBox.classList.add('sucesso');
 
-        await verificarHU(huDetectada);
+        await verificarHU(huEncontrada);
         return;
 
       } else {
-        const pos1789 = textoLimpo.indexOf('1789');
+        const pos1789 = numerosPuros.indexOf('1789');
 
         if (pos1789 !== -1) {
-          const parcial = textoLimpo.substring(pos1789, pos1789 + 18);
+          const parcial = numerosPuros.substring(pos1789, pos1789 + 18);
           const faltam = 18 - parcial.length;
 
           spanNumsEstabilizados.innerText = parcial;
           spanNumsAtivos.innerText = "?".repeat(Math.max(0, faltam));
           contadorDigitosEl.innerText = `${parcial.length} / 18`;
 
-          modoLeituraEl.innerText = "LENDO BLOCO 1789...";
-          dicaStatusEl.innerText = "👁️ Mantenha a câmera estável!";
+          modoLeituraEl.innerText = "FOCANDO NO 1789...";
+          dicaStatusEl.innerText = "👁️ Segure firme...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           spanNumsEstabilizados.innerText = "";
           spanNumsAtivos.innerText = "1789????????????";
           contadorDigitosEl.innerText = "0 / 18";
 
-          modoLeituraEl.innerText = "MIRA NO WMS / MATERIAL";
-          dicaStatusEl.innerText = "🟢 Enquadre o bloco WMS na mira";
+          modoLeituraEl.innerText = "PROCURANDO ETIQUETA...";
+          dicaStatusEl.innerText = "🟢 Aponta para a etiqueta";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -257,11 +232,11 @@ async function loopLeituraOCR() {
   }
 
   if (!processandoHU) {
-    setTimeout(loopLeituraOCR, 60);
+    setTimeout(loopLeituraOCR, 80);
   }
 }
 
-// Comunicação Google Sheets
+// Comunicação Planilha
 async function verificarHU(huCompleta) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -307,8 +282,8 @@ function resetarVisor() {
   spanNumsAtivos.innerText = "1789????????????";
   
   contadorDigitosEl.innerText = "0 / 18";
-  modoLeituraEl.innerText = "MIRA NO WMS / MATERIAL";
-  dicaStatusEl.innerText = "🟢 Enquadre o bloco WMS na mira";
+  modoLeituraEl.innerText = "PROCURANDO ETIQUETA...";
+  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta";
   dicaStatusEl.style.color = "#00e676";
   
   const ctx = canvas.getContext('2d');
