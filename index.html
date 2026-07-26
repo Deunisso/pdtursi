@@ -13,33 +13,36 @@
 <body>
 
   <div class="app-container">
-    <!-- Câmera em Tela Cheia -->
+    <!-- Câmera -->
     <div id="video-container">
       <video id="webcam" autoplay playsinline muted></video>
       <canvas id="canvas-processamento"></canvas>
     </div>
 
-    <!-- Canto Superior Esquerdo: Status da Leitura com Borda Neon -->
+    <!-- Canto Superior Esquerdo -->
     <div id="modo-leitura" class="status-escaneando">ESCANEANDO...</div>
 
-    <!-- Canto Superior Direito: Quantidades Restantes -->
+    <!-- Canto Superior Direito -->
     <div class="contador-box">
       <span id="contador-digitos">0 RESTANTES</span>
     </div>
 
-    <!-- Elementos ocultos/invisíveis usados pelo JavaScript (para evitar erros de referência) -->
-    <div class="visor-numeros" style="display: none;">
-      <span id="nums-estabilizados"></span>
-      <span id="nums-ativos"></span>
+    <!-- 🎯 MEIO DA TELA: TERMINAL DE LOGS DE CONEXÃO -->
+    <div id="log-terminal" class="terminal-box">
+      <div class="terminal-header">STATUS DA CONEXÃO APPS SCRIPT</div>
+      <div id="log-mensagens" class="terminal-body">
+        <div>🟢 Sistema iniciado. Aguardando leitura...</div>
+      </div>
     </div>
 
-    <!-- Painel Inferior: HUs Pendentes -->
+    <!-- 🔻 PARTE INFERIOR: PAINEL DE HUS PENDENTES (VISÍVEL DENTRO DA TELA) -->
     <div id="painel-pendentes">
       <div class="pendentes-header">
         <span>⌛ HUS PENDENTES</span>
       </div>
       <div id="container-lista-hus" class="lista-hus">
-        <!-- Chips das HUs serão gerados dinamicamente via JS -->
+        <div class="hu-chip">178910240423291973</div>
+        <div class="hu-chip">178910240423291974</div>
       </div>
     </div>
   </div>
