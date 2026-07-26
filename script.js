@@ -1,5 +1,5 @@
 // =================================================================
-// ⚠️ CONFIGURAÇÃO: Insira a sua URL do Google Apps Script
+// ⚠️ CONFIGURAÇÃO: URL do Google Apps Script
 // =================================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
@@ -25,12 +25,12 @@ let workerOCR = null;
 let lanternaLigada = false;
 let listaPendentesGlobal = [];
 
-// 🧠 SISTEMA DE CACHE DE ACUMULAÇÃO DIGIT-BY-DIGIT
+// 🧠 CACHE ACUMULATIVO (Array de 18 Slots)
 let cacheDigitos = new Array(18).fill(null); 
 let historicoPosicoes = Array.from({ length: 18 }, () => ({}));
 let tempoUltimaAtualizacao = Date.now();
 
-// Som de Bip ao confirmar a HU
+// Som de Bip
 function tocarBip() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -48,7 +48,7 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// 🔦 Controle da Lanterna Universal
+// 🔦 Controle da Lanterna Universal (Sintonizado com o onclick do HTML)
 async function alternarLanterna() {
   const stream = video.srcObject;
   if (!stream) return;
@@ -56,12 +56,11 @@ async function alternarLanterna() {
   if (!track) return;
 
   try {
-    const novoEstado = !lanternaLigada;
+    lanternaLigada = !lanternaLigada;
     await track.applyConstraints({
-      advanced: [{ torch: novoEstado }]
+      advanced: [{ torch: lanternaLigada }]
     });
 
-    lanternaLigada = novoEstado;
     if (btnLanterna) {
       btnLanterna.classList.toggle('ativo', lanternaLigada);
     }
@@ -70,22 +69,18 @@ async function alternarLanterna() {
   }
 }
 
-if (btnLanterna) {
-  btnLanterna.addEventListener('click', alternarLanterna);
-}
-
 // Extrai estritamente caracteres numéricos
 function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// Limpa o cache acumulativo
+// Reseta o cache de 18 dígitos
 function resetarCacheAcumulativo() {
   cacheDigitos = new Array(18).fill(null);
   historicoPosicoes = Array.from({ length: 18 }, () => ({}));
 }
 
-// Busca e Atualiza o Dashboard
+// Atualiza o Dashboard da Planilha
 async function atualizarDashboard() {
   try {
     const res = await fetch(SCRIPT_URL);
@@ -109,7 +104,7 @@ async function atualizarDashboard() {
   }
 }
 
-// Exibe na lista inferior os 5 últimos dígitos
+// Exibe a lista de pendentes
 function renderizarListaPendentes(lista) {
   listaPendentesGlobal = lista.map(item => extrairNumeros(item)).filter(item => item.length > 0);
   
@@ -121,7 +116,7 @@ function renderizarListaPendentes(lista) {
     containerListaHus.innerHTML = `
       <div class="lista-vazia">
         <span>🎉 PARABÉNS!</span>
-        <span>Todas as HUs foram bipadas com sucesso.</span>
+        <span>Todas as HUs foram bipadas.</span>
       </div>`;
     return;
   }
@@ -135,11 +130,10 @@ function renderizarListaPendentes(lista) {
   }).join('');
 }
 
-// Remove o card visual ao bipar
+// Remove card animado ao bipar
 function removerHuDaListaVisual(huEncontrada) {
   const huLimpa = extrairNumeros(huEncontrada);
   const ultimos5 = huLimpa.slice(-5);
-  
   const chips = containerListaHus.querySelectorAll('.hu-chip');
   
   chips.forEach(chip => {
@@ -162,7 +156,6 @@ function removerHuDaListaVisual(huEncontrada) {
         if (elFaltam && elEncontradas) {
           let faltam = parseInt(elFaltam.innerText || "0", 10);
           let encontradas = parseInt(elEncontradas.innerText || "0", 10);
-          
           if (faltam > 0) elFaltam.innerText = faltam - 1;
           elEncontradas.innerText = encontradas + 1;
         }
@@ -175,7 +168,7 @@ function removerHuDaListaVisual(huEncontrada) {
   });
 }
 
-// Ativa a Câmera
+// Inicia a Câmera HD
 navigator.mediaDevices.getUserMedia({ 
   video: { 
     facingMode: "environment", 
@@ -192,24 +185,23 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização do Tesseract
+// Inicialização do Tesseract (Configurado para alta fidelidade nos números)
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Inicializando IA com Cache por Dígito...";
+  dicaStatusEl.innerText = "⚡ Inicializando IA de Leitura...";
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789', 
-    tessedit_pageseg_mode: '7', // Modo linha contínua de números
+    tessedit_char_whitelist: '0123456789', // Força ler APENAS NÚMEROS
   });
 
-  dicaStatusEl.innerText = "🟢 Alinhe os números na mira";
+  dicaStatusEl.innerText = "🟢 Alinhe os 18 dígitos na linha de mira";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// Loop de Leitura com Cache Progressivo
+// Loop de Leitura OCR + Visor com Máscara '??????'
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 60);
@@ -223,86 +215,82 @@ async function loopLeituraOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // Recorte focado na linha dos números
-      const CROP_W = vw * 0.75;  
-      const CROP_H = vh * 0.18;  
+      // Recorte ajustado para a linha da HU (Abaixo do WMS)
+      const CROP_W = vw * 0.80;  
+      const CROP_H = vh * 0.22;  
       const CROP_X = vw * 0.02;  
-      const CROP_Y = vh * 0.20;  
+      const CROP_Y = vh * 0.18;  
 
       const SCALE = 2.0;
       canvas.width = CROP_W * SCALE;
       canvas.height = CROP_H * SCALE;
       
       const ctx = canvas.getContext('2d');
-
       ctx.drawImage(
         video, 
         CROP_X, CROP_Y, CROP_W, CROP_H, 
         0, 0, CROP_W * SCALE, CROP_H * SCALE
       );
 
-      // Leitura OCR
+      // OCR nos números
       const result = await workerOCR.recognize(canvas);
       const numerosCapturados = extrairNumeros(result.data.text || "");
 
-      // Procura a ocorrência de 1789
+      // Busca o prefixo clássico "1789"
       const index1789 = numerosCapturados.indexOf('1789');
 
       if (index1789 !== -1) {
-        const blocoNumerico = numerosCapturados.substring(index1789, index1789 + 18);
+        const blocoLido = numerosCapturados.substring(index1789, index1789 + 18);
 
-        // 🛡️ SE MUDOU A ETIQUETA/HU, RESETA O CACHE
-        if (cacheDigitos[0] && cacheDigitos[0] !== '1') {
-          resetarCacheAcumulativo();
-        }
-
-        // 🧠 PROCESSAMENTO DO CACHE POR POSIÇÃO
-        for (let i = 0; i < blocoNumerico.length; i++) {
-          const digitoLido = blocoNumerico[i];
-
-          // Se essa posição ainda não estiver 100% fixada
+        // 🧠 PROCESSA O CACHE E CONFIRMA CADA DÍGITO
+        for (let i = 0; i < blocoLido.length; i++) {
+          const char = blocoLido[i];
           if (!cacheDigitos[i]) {
-            historicoPosicoes[i][digitoLido] = (historicoPosicoes[i][digitoLido] || 0) + 1;
-
-            // Se o mesmo dígito apareceu 2x na mesma posição, FIXA NO CACHE!
-            if (historicoPosicoes[i][digitoLido] >= 2) {
-              cacheDigitos[i] = digitoLido;
+            historicoPosicoes[i][char] = (historicoPosicoes[i][char] || 0) + 1;
+            
+            // Confirmou o mesmo número na mesma posição 2x consecutivas
+            if (historicoPosicoes[i][char] >= 2) {
+              cacheDigitos[i] = char;
             }
           }
         }
 
         tempoUltimaAtualizacao = Date.now();
 
-        // CONSTRÓI A STRING FINAL UNINDO O CACHE + O QUE FOI LIDO
-        let huResultado = "";
-        let confirmadosCount = 0;
+        // 🎯 MONTA A MÁSCARA VISUAL COM DÍGITOS + INTERROGAÇÕES '?'
+        let textoConfirmado = "";
+        let textoPendente = "";
+        let contagemConfirmados = 0;
 
         for (let i = 0; i < 18; i++) {
           if (cacheDigitos[i]) {
-            huResultado += cacheDigitos[i];
-            confirmadosCount++;
-          } else if (i < blocoNumerico.length) {
-            huResultado += blocoNumerico[i]; // Dígito temporário/ainda não confirmado
+            textoConfirmado += cacheDigitos[i];
+            contagemConfirmados++;
+          } else if (i < blocoLido.length) {
+            // Mostra o número sendo testado no momento
+            textoPendente += blocoLido[i]; 
+          } else {
+            // Preenche o restante com '?' para você ver o que falta
+            textoPendente += "?"; 
           }
         }
 
-        // Atualiza a tela com o progresso do cache
-        modoLeituraEl.innerText = `CACHE INTELIGENTE: ${confirmadosCount}/18 DÍGITOS FIXOS`;
-        
-        spanNumsEstabilizados.innerText = huResultado.substring(0, confirmadosCount);
-        spanNumsAtivos.innerText = huResultado.substring(confirmadosCount);
-        contadorDigitosEl.innerText = `${huResultado.length} / 18`;
+        // Atualiza a tela com a máscara de leitura
+        modoLeituraEl.innerText = `CACHE INTELIGENTE: ${contagemConfirmados}/18 CONFIRMADOS`;
+        spanNumsEstabilizados.innerText = textoConfirmado;
+        spanNumsAtivos.innerText = textoPendente;
+        contadorDigitosEl.innerText = `${contagemConfirmados} / 18`;
 
-        dicaStatusEl.innerText = "🧠 Mantenha a câmera firme...";
+        dicaStatusEl.innerText = "👁️ Mantenha firme... Coletando dígitos!";
         dicaStatusEl.style.color = "#ffd700";
 
-        // 🎉 SE COMPLETOU OS 18 DÍGITOS NO CACHE -> APROVA A HU!
-        if (cacheDigitos.every(d => d !== null) && cacheDigitos.length === 18 && !processandoHU) {
+        // 🎉 QUANDO COMPLETAR OS 18 DÍGITOS -> FINALIZA A LEITURA
+        if (cacheDigitos.every(d => d !== null) && !processandoHU) {
           const huCompleta = cacheDigitos.join('');
           processandoHU = true;
 
-          modoLeituraEl.innerText = "🔒 HU COMPLETA E CONFIRMADA!";
-          dicaStatusEl.innerText = "✓ LEITURA 100% PRECISA!";
+          modoLeituraEl.innerText = "🔒 HU CONFIRMADA!";
+          dicaStatusEl.innerText = "✓ LEITURA 100% CONCLUÍDA!";
           dicaStatusEl.style.color = "#00e676";
 
           spanNumsEstabilizados.innerText = huCompleta;
@@ -317,15 +305,15 @@ async function loopLeituraOCR() {
         }
 
       } else {
-        // Se ficou 1.5s sem ver o padrão 1789, limpa o cache acumulado
+        // Se ficou 1.5s sem ver o padrão 1789, exibe '??????' e aguarda
         if (Date.now() - tempoUltimaAtualizacao > 1500) {
           resetarCacheAcumulativo();
-          spanNumsEstabilizados.innerText = "Aguardando";
-          spanNumsAtivos.innerText = "...";
+          spanNumsEstabilizados.innerText = "";
+          spanNumsAtivos.innerText = "1789????????????";
           contadorDigitosEl.innerText = "0 / 18";
           
-          modoLeituraEl.innerText = "MODO IA: CACHE DINÂMICO";
-          dicaStatusEl.innerText = "🟢 Posicione o número '1789...' na mira";
+          modoLeituraEl.innerText = "PADRÃO: 1789... (18 DÍGITOS)";
+          dicaStatusEl.innerText = "🟢 Alinhe os 18 dígitos na linha de mira";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -340,7 +328,7 @@ async function loopLeituraOCR() {
   }
 }
 
-// Envia a HU para a Planilha e Reseta
+// Valida a HU na Planilha
 async function verificarHU(huCompleta) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -379,18 +367,16 @@ async function verificarHU(huCompleta) {
   }
 }
 
-// Reseta a Interface e Limpa o Cache
+// Reseta o Visor
 function resetarVisor() {
   miraBox.classList.remove('sucesso');
   
-  if (spanNumsEstabilizados && spanNumsAtivos) {
-    spanNumsEstabilizados.innerText = "Aguardando";
-    spanNumsAtivos.innerText = "...";
-  }
+  spanNumsEstabilizados.innerText = "";
+  spanNumsAtivos.innerText = "1789????????????";
   
   contadorDigitosEl.innerText = "0 / 18";
-  modoLeituraEl.innerText = "MODO IA: CACHE DINÂMICO";
-  dicaStatusEl.innerText = "🟢 Posicione o número '1789...' na mira";
+  modoLeituraEl.innerText = "PADRÃO: 1789... (18 DÍGITOS)";
+  dicaStatusEl.innerText = "🟢 Alinhe os 18 dígitos na linha de mira";
   dicaStatusEl.style.color = "#00e676";
   
   const ctx = canvas.getContext('2d');
@@ -401,6 +387,6 @@ function resetarVisor() {
   setTimeout(loopLeituraOCR, 100);
 }
 
-// Atualização Inicial do Dashboard
+// Inicialização
 atualizarDashboard();
 setInterval(atualizarDashboard, 5000);
