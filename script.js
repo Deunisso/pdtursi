@@ -11,8 +11,14 @@ function limparCodigoHU(textoRaw) {
 }
 
 async function inicializar() {
+  // Verificação de HTTPS antes de tentar ligar a câmera
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    exibirPainelInferior("⚠️ ERRO DE SEGURANÇA", "HTTPS NECESSÁRIO", "A câmera exige endereço HTTPS para funcionar (ex: GitHub Pages/Vercel).", "alerta");
+  }
+
   await carregarDadosSilenciosamente();
   iniciarCamera();
+
   // Sincroniza a contagem a cada 10 segundos
   setInterval(carregarDadosSilenciosamente, 10000);
 }
@@ -22,21 +28,29 @@ async function carregarDadosSilenciosamente() {
   if (aguardandoProcessamento) return;
   const dot = document.getElementById('sync-dot');
   const texto = document.getElementById('sync-texto');
-  dot.className = "dot sincronizando";
+  if (dot) dot.className = "dot sincronizando";
 
   try {
     const urlBusca = `${APPS_SCRIPT_URL}?action=obterLista`;
     const response = await fetch(urlBusca);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    if (!response.ok) {
+      throw new Error(`Erro HTTP ${response.status}`);
+    }
 
-    listaHUs = await response.json();
-    atualizarContadores();
-
-    dot.className = "dot";
-    texto.innerText = "Sincronizado";
+    const dados = await response.json();
+    if (Array.isArray(dados)) {
+      listaHUs = dados;
+      atualizarContadores();
+      if (dot) dot.className = "dot";
+      if (texto) texto.innerText = "Sincronizado";
+    } else {
+      throw new Error("Resposta da planilha não é uma lista válida.");
+    }
   } catch (err) {
-    dot.className = "dot erro";
-    texto.innerText = "Offline";
+    console.error("Erro na sincronização:", err);
+    if (dot) dot.className = "dot erro";
+    if (texto) texto.innerText = "Offline (Erro no Link do Script)";
   }
 }
 
@@ -48,8 +62,11 @@ function atualizarContadores() {
   const encontrados = listaHUs.filter(item => item.encontrado).length;
   const restantes = total - encontrados;
 
-  document.getElementById('qtd-restante').innerText = restantes;
-  document.getElementById('qtd-total').innerText = `de ${total} itens pendentes`;
+  const elRestante = document.getElementById('qtd-restante');
+  const elTotal = document.getElementById('qtd-total');
+
+  if (elRestante) elRestante.innerText = restantes;
+  if (elTotal) elTotal.innerText = `de ${total} itens pendentes`;
 }
 
 // Atualiza o painel HUD inferior com a informação da última HU bipada
@@ -59,15 +76,17 @@ function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   const elCodigo = document.getElementById('bip-hu-code');
   const elDetalhes = document.getElementById('bip-detalhes');
 
-  card.className = `hud-bottom ${tipo}`;
-  elTitulo.innerText = titulo;
-  elCodigo.innerText = codigo;
-  elDetalhes.innerText = detalhes;
+  if (card) card.className = `hud-bottom ${tipo}`;
+  if (elTitulo) elTitulo.innerText = titulo;
+  if (elCodigo) elCodigo.innerText = codigo;
+  if (elDetalhes) elDetalhes.innerText = detalhes;
 
   // Animação de flash no laser
   const wrapper = document.getElementById('scanner-container');
-  wrapper.classList.add('capturado');
-  setTimeout(() => wrapper.classList.remove('capturado'), 1000);
+  if (wrapper) {
+    wrapper.classList.add('capturado');
+    setTimeout(() => wrapper.classList.remove('capturado'), 1000);
+  }
 }
 
 // Leitura do Código de Barras
@@ -106,7 +125,7 @@ async function onScanSuccess(decodedText) {
   // Atualiza instantaneamente a contagem na tela
   atualizarContadores();
   
-  exibirPainelInferior("⚡ HU BIPADA COM SUCESSO!", itemExistente.hu, `Bin/Posição: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "sucesso");
+  exibirPainelInferior("⚡ HU BIPADA COM SUCESSO!", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "sucesso");
 
   // Envia a confirmação para a Planilha do Google
   try {
@@ -119,40 +138,51 @@ async function onScanSuccess(decodedText) {
   }
 }
 
-// Inicia a câmera Fullscreen em Full HD
+// Inicia a câmera com tolerância universal a falhas
 async function iniciarCamera() {
-  html5QrCode = new Html5Qrcode("reader", {
-    formatsToSupport: [ 
-      Html5QrcodeSupportedFormats.CODE_128, 
-      Html5QrcodeSupportedFormats.EAN_13, 
-      Html5QrcodeSupportedFormats.QR_CODE,
-      Html5QrcodeSupportedFormats.ITF 
-    ]
-  });
-
-  const config = { 
-    fps: 30,
-    disableFlip: false,
-    // Mira proporcional para tela inteira (ótima na horizontal/paisagem)
-    qrbox: function(viewfinderWidth, viewfinderHeight) {
-      const width = Math.floor(viewfinderWidth * 0.85);
-      const height = Math.floor(viewfinderHeight * 0.40);
-      return { width: width, height: height };
-    },
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-  };
-
-  const videoConstraints = {
-    facingMode: "environment",
-    width: { min: 1280, ideal: 1920, max: 3840 },
-    height: { min: 720, ideal: 1080, max: 2160 },
-    focusMode: "continuous"
-  };
-
   try {
-    await html5QrCode.start(videoConstraints, config, onScanSuccess, () => {});
+    html5QrCode = new Html5Qrcode("reader");
+
+    const config = { 
+      fps: 25,
+      disableFlip: false,
+      qrbox: function(viewfinderWidth, viewfinderHeight) {
+        const width = Math.floor(viewfinderWidth * 0.85);
+        const height = Math.floor(viewfinderHeight * 0.45);
+        return { width: width, height: height };
+      },
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    };
+
+    // Tenta abrir a câmera traseira de modo simples universal
+    await html5QrCode.start(
+      { facingMode: "environment" }, 
+      config, 
+      onScanSuccess, 
+      () => {}
+    );
+
   } catch (err) {
-    await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
+    console.warn("Tentando fallback por ID de dispositivo de câmera...", err);
+    
+    // Fallback: Busca a lista física de câmeras do celular e pega a principal
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices && devices.length > 0) {
+        const cameraId = devices[devices.length - 1].id; // Pega a última câmera (traseira)
+        await html5QrCode.start(cameraId, { fps: 20 }, onScanSuccess, () => {});
+      } else {
+        throw new Error("Nenhuma câmera encontrada no dispositivo.");
+      }
+    } catch (errFallback) {
+      console.error("Erro final na câmera:", errFallback);
+      exibirPainelInferior(
+        "❌ ERRO NA CÂMERA", 
+        "SEM PERMISSÃO OU SEM HTTPS", 
+        "Permita o acesso à câmera no navegador ou rode o site via HTTPS.", 
+        "alerta"
+      );
+    }
   }
 }
 
