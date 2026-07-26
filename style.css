@@ -13,11 +13,13 @@ html, body {
   color: #fff;
 }
 
-/* Container Principal */
 .app-container {
   position: relative;
   width: 100vw;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 /* Câmera Fullscreen */
@@ -36,92 +38,115 @@ video {
   object-fit: cover;
 }
 
-/* 🟢 TOP-ESQUERDO: "ESCANEANDO..." COM BORDA VERDE ANIMADA */
+/* TOP-ESQUERDO */
 .status-escaneando {
   position: absolute;
-  top: 15px;
-  left: 15px;
+  top: 10px;
+  left: 10px;
   z-index: 50;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(0, 0, 0, 0.75);
+  gap: 6px;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.85);
   border: 2px solid #00e676;
-  border-radius: 30px;
+  border-radius: 20px;
   color: #00e676;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   backdrop-filter: blur(6px);
-  box-shadow: 0 0 12px rgba(0, 230, 118, 0.4);
-  animation: pulsoVerde 1.8s infinite alternate;
+  box-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
 }
 
-/* Ponto verde piscante ao lado do texto */
 .status-escaneando::before {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   background-color: #00e676;
   border-radius: 50%;
-  box-shadow: 0 0 8px #00e676;
+  box-shadow: 0 0 6px #00e676;
 }
 
-@keyframes pulsoVerde {
-  0% {
-    border-color: #00e676;
-    box-shadow: 0 0 8px rgba(0, 230, 118, 0.3);
-  }
-  100% {
-    border-color: #69f0ae;
-    box-shadow: 0 0 20px rgba(0, 230, 118, 0.8);
-  }
-}
-
-/* 🟡 TOP-DIREITO: QUANTIDADES QUE FALTAM */
+/* TOP-DIREITO */
 .contador-box {
   position: absolute;
-  top: 15px;
-  right: 15px;
+  top: 10px;
+  right: 10px;
   z-index: 50;
-  padding: 8px 16px;
-  background: rgba(0, 0, 0, 0.75);
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.85);
   border: 2px solid #ffd700;
-  border-radius: 12px;
+  border-radius: 10px;
   color: #ffd700;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
   backdrop-filter: blur(6px);
-  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
 }
 
-/* 🔻 PARTE INFERIOR: PAINEL DE HUs PENDENTES */
+/* 🎯 LOGS DE CONEXÃO NO MEIO DA TELA */
+.terminal-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  width: 85%;
+  max-width: 450px;
+  background: rgba(5, 8, 15, 0.88);
+  border: 1px solid rgba(0, 210, 255, 0.5);
+  border-radius: 8px;
+  padding: 8px;
+  font-family: monospace;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.terminal-header {
+  font-size: 9px;
+  color: #00d2ff;
+  font-weight: bold;
+  border-bottom: 1px solid rgba(0, 210, 255, 0.2);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.terminal-body {
+  font-size: 11px;
+  max-height: 80px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.log-info { color: #00e676; }
+.log-warn { color: #ffd700; }
+.log-error { color: #ff5252; font-weight: bold; }
+
+/* 🔻 PAINEL INFERIOR AJUSTADO (TOTALMENTE VISÍVEL NA TELA) */
 #painel-pendentes {
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
-  min-height: 75px;
-  max-height: 110px;
+  height: 65px; /* Altura ideal sem estourar o viewport */
   z-index: 50;
-  background: rgba(12, 12, 18, 0.92);
-  border-top: 2px solid rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  padding: 10px 15px;
+  background: rgba(8, 8, 12, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 6px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
 }
 
 .pendentes-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 800;
   color: #ff5252;
-  text-transform: uppercase;
   letter-spacing: 1px;
 }
 
@@ -129,25 +154,20 @@ video {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.hu-chip {
-  background: #1c1c2b;
-  border: 1px solid #00d2ff;
-  color: #ffd700;
-  font-family: monospace;
-  font-size: 13px;
-  font-weight: bold;
-  padding: 6px 12px;
-  border-radius: 6px;
   white-space: nowrap;
 }
 
-/* Ocultar elementos desnecessários */
-#canvas-processamento,
-.mira,
-#dashboard,
-.visor-numeros {
+.hu-chip {
+  background: #181824;
+  border: 1px solid #00d2ff;
+  color: #ffd700;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+#canvas-processamento {
   display: none !important;
 }
