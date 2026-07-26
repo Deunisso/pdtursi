@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conferência de HUs (Otimizado GS1-128)</title>
+  <title>Conferência de HUs (Scanner Compacto)</title>
   
   <script src="https://unpkg.com/html5-qrcode"></script>
 
@@ -11,6 +11,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f6f9; padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
     .container { width: 100%; max-width: 500px; }
+    
     .header-panel { background: #ffffff; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 15px; text-align: center; position: relative; }
     .header-panel h2 { font-size: 1.1rem; color: #1a73e8; margin-bottom: 5px; }
     .sync-status { position: absolute; top: 12px; right: 15px; font-size: 0.75rem; color: #5f6368; display: flex; align-items: center; gap: 4px; }
@@ -20,8 +21,84 @@
     .progress-bar-container { background: #e0e0e0; height: 10px; border-radius: 5px; overflow: hidden; margin-top: 10px; }
     .progress-bar { background: #34a853; height: 100%; width: 0%; transition: width 0.4s ease; }
     
-    #reader { width: 100%; border-radius: 12px; overflow: hidden; border: 2px solid #dadce0; background: #000; margin-bottom: 15px; }
+    /* 🚀 NOVO VISUAL DA CÂMERA: TARJA COMPACTA COM LASER */
+    .scanner-wrapper {
+      position: relative;
+      width: 100%;
+      height: 150px; /* Altura fixa reduzida (Tarja) */
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+      border: 2px solid #34a853;
+      margin-bottom: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
     
+    /* Efeito de flash verde quando detecta o código */
+    .scanner-wrapper.capturado {
+      border-color: #00ff66;
+      box-shadow: 0 0 20px #00ff66;
+    }
+
+    #reader { width: 100%; height: 100%; }
+    #reader video {
+      width: 100% !important;
+      height: 150px !important;
+      object-fit: cover !important; /* Preenche a tarja sem distorcer o vídeo */
+    }
+    
+    /* Linha Laser Animada */
+    .laser-line {
+      position: absolute;
+      top: 0;
+      left: 5%;
+      width: 90%;
+      height: 2px;
+      background: #ff0000;
+      box-shadow: 0 0 8px #ff0000, 0 0 12px #ff0000;
+      animation: varredura 2s infinite ease-in-out;
+      z-index: 10;
+      pointer-events: none;
+    }
+    
+    .scanner-wrapper.capturado .laser-line {
+      background: #00ff66;
+      box-shadow: 0 0 10px #00ff66, 0 0 20px #00ff66;
+    }
+
+    /* Miras nos Cantos (Estilo Mira Futurista) */
+    .mira {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: #ffffff;
+      border-style: solid;
+      pointer-events: none;
+      z-index: 5;
+      opacity: 0.8;
+    }
+    .top-left { top: 15px; left: 15px; border-width: 3px 0 0 3px; }
+    .top-right { top: 15px; right: 15px; border-width: 3px 3px 0 0; }
+    .bottom-left { bottom: 15px; left: 15px; border-width: 0 0 3px 3px; }
+    .bottom-right { bottom: 15px; right: 15px; border-width: 0 3px 3px 0; }
+
+    /* Etiqueta flutuante informando status da câmera */
+    .scanner-status {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 3px 10px;
+      border-radius: 10px;
+      z-index: 10;
+      letter-spacing: 0.5px;
+      pointer-events: none;
+    }
+
     #feedback { padding: 10px 15px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; text-align: center; margin-bottom: 15px; display: none; }
     #feedback.sucesso { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     #feedback.erro { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
@@ -39,8 +116,7 @@
     .hu-card.encontrado .hu-codigo { color: #137333; }
     .hu-card.encontrado .badge { background-color: #34a853; color: #ffffff; }
 
-    /* ESTILOS DO PAINEL DE LOG NA TELA */
-    #painel-logs { margin-top: 25px; background: #1e1e1e; color: #00ff66; border-radius: 8px; padding: 10px; font-family: monospace; font-size: 0.75rem; max-height: 200px; overflow-y: auto; width: 100%; border: 1px solid #333; }
+    #painel-logs { margin-top: 25px; background: #1e1e1e; color: #00ff66; border-radius: 8px; padding: 10px; font-family: monospace; font-size: 0.75rem; max-height: 180px; overflow-y: auto; width: 100%; border: 1px solid #333; }
     .log-entry { margin-bottom: 5px; border-bottom: 1px solid #2a2a2a; padding-bottom: 3px; word-break: break-all; }
     .log-time { color: #888; font-size: 0.7rem; }
     .log-erro { color: #ff5555; font-weight: bold; }
@@ -48,6 +124,13 @@
     .log-info { color: #00ddff; }
 
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    
+    /* Animação do laser subindo e descendo na tarja */
+    @keyframes varredura {
+      0% { top: 10%; opacity: 0.8; }
+      50% { top: 85%; opacity: 1; }
+      100% { top: 10%; opacity: 0.8; }
+    }
   </style>
 </head>
 <body>
@@ -65,8 +148,16 @@
       </div>
     </div>
 
-    <!-- Leitor da Câmera -->
-    <div id="reader"></div>
+    <!-- 🚀 CÂMERA EM FORMATO TARJA COM LASER E MIRAS -->
+    <div id="scanner-container" class="scanner-wrapper">
+      <div id="reader"></div>
+      <div class="laser-line"></div>
+      <div class="mira top-left"></div>
+      <div class="mira top-right"></div>
+      <div class="mira bottom-left"></div>
+      <div class="mira bottom-right"></div>
+      <div id="scanner-text" class="scanner-status">🔍 BUSCANDO CÓDIGO DE BARRAS...</div>
+    </div>
 
     <!-- Mensagens de Alerta (Sucesso/Erro) -->
     <div id="feedback"></div>
@@ -78,7 +169,7 @@
     <!-- PAINEL DE LOGS -->
     <div class="list-title" style="color: #1a73e8; margin-top: 30px;">🐞 Diagnóstico em Tempo Real:</div>
     <div id="painel-logs">
-      <div class="log-entry"><span class="log-info">[Sistema] Aguardando leitura...</span></div>
+      <div class="log-entry"><span class="log-info">[Sistema] Scanner visual ativado...</span></div>
     </div>
   </div>
 
@@ -105,18 +196,30 @@
       console.log(`[${time}] ${mensagem}`);
     }
 
-    // 🚀 NOVO TRATADOR DE CÓDIGO GS1-128 / SSCC
     function limparCodigoHU(textoRaw) {
-      // 1. Remove qualquer caractere que não seja número (parênteses, espaços, colchetes ou prefixos ]C1)
       let limpo = textoRaw.replace(/[^\d]/g, '');
-      
-      // 2. Regra SAP vs GS1: Se leu 20 dígitos começando com '00' (Ex: 00178910240423291959),
-      // removemos os dois zeros iniciais para bater com os 18 dígitos da planilha (178910240423291959)
       if (limpo.length === 20 && limpo.startsWith('00')) {
         limpo = limpo.substring(2);
       }
-      
       return limpo;
+    }
+
+    // EFEITO VISUAL DE LEITURA (PISCA VERDE)
+    function piscarScannerSucesso() {
+      const wrapper = document.getElementById('scanner-container');
+      const txt = document.getElementById('scanner-text');
+      
+      wrapper.classList.add('capturado');
+      txt.innerText = "⚡ CÓDIGO CAPTURADO!";
+      txt.style.background = "rgba(0, 255, 102, 0.8)";
+      txt.style.color = "#000";
+      
+      setTimeout(() => {
+        wrapper.classList.remove('capturado');
+        txt.innerText = "🔍 BUSCANDO CÓDIGO DE BARRAS...";
+        txt.style.background = "rgba(0, 0, 0, 0.6)";
+        txt.style.color = "#fff";
+      }, 1200);
     }
 
     async function inicializar() {
@@ -184,7 +287,6 @@
     async function onScanSuccess(decodedText) {
       if (aguardandoProcessamento) return;
 
-      // Limpa e padroniza o código lido pela câmera
       const codigoLido = limparCodigoHU(decodedText);
       logNaTela(`Leitura Bruta: "${decodedText}" ➔ HU Tratada: "${codigoLido}"`, "info");
 
@@ -194,7 +296,7 @@
 
       if (!itemExistente) {
         mostrarFeedback(`HU ${codigoLido} não está na lista!`, false);
-        logNaTela(`ALERTA: HU ${codigoLido} não encontrada entre os itens pendentes.`, "aviso");
+        logNaTela(`ALERTA: HU ${codigoLido} não encontrada.`, "aviso");
         return;
       }
 
@@ -202,6 +304,9 @@
         mostrarFeedback(`HU ${codigoLido} já foi bipada!`, false);
         return;
       }
+
+      // Ativa o feedback visual no leitor (laser verde!)
+      piscarScannerSucesso();
 
       aguardandoProcessamento = true;
       itemExistente.encontrado = true;
@@ -218,7 +323,7 @@
         const res = await response.json();
 
         if (res.sucesso) {
-          logNaTela(`✓ HU ${codigoLido} gravada com sucesso no Google Sheets!`, "normal");
+          logNaTela(`✓ HU ${codigoLido} gravada no Sheets com sucesso!`, "normal");
         } else {
           logNaTela(`Erro na planilha: ${res.mensagem}`, "erro");
         }
@@ -237,9 +342,7 @@
       setTimeout(() => { fb.style.display = 'none'; }, 3500);
     }
 
-    // 🚀 OTIMIZAÇÃO DA CÂMERA PARA CÓDIGO DE BARRAS LONGO (GS1-128 / CODE 128)
     async function iniciarCamera() {
-      // Habilita explicitamente o suporte aos formatos lineares de logística
       html5QrCode = new Html5Qrcode("reader", {
         formatsToSupport: [ 
           Html5QrcodeSupportedFormats.CODE_128, 
@@ -249,20 +352,19 @@
         ]
       });
 
+      // Configuração para encaixar perfeitamente na nossa "Tarja Compacta"
       const config = { 
         fps: 20, 
-        // Área de leitura larga e retangular (ideal para códigos horizontais longos)
-        qrbox: { width: 320, height: 130 },
-        aspectRatio: 1.777778, // Proporção 16:9
+        qrbox: { width: 280, height: 80 }, // Caixa de mira horizontal perfeita para barras
+        aspectRatio: 2.0, // Força a câmera a gerar um vídeo mais largo e baixo
         experimentalFeatures: {
-          // Usa a aceleração de hardware nativa do celular/navegador (muito mais precisa para barras finas)
           useBarCodeDetectorIfSupported: true 
         }
       };
 
       try {
         await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
-        logNaTela("Câmera otimizada para Code 128 / GS1 iniciada.", "normal");
+        logNaTela("Scanner visual em modo tarja iniciado.", "normal");
       } catch (err) {
         logNaTela(`Erro ao iniciar câmera: ${err}`, "erro");
         mostrarFeedback("Erro ao acessar a câmera.", false);
