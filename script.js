@@ -23,7 +23,7 @@ let workerOCR = null;
 let lanternaLigada = false;
 let listaPendentesGlobal = [];
 
-// Som de Bip
+// Som de Bip ao confirmar a HU
 function tocarBip() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -41,7 +41,7 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Controle de Lanterna
+// Controle da Lanterna do Celular
 async function alternarLanterna() {
   const stream = video.srcObject;
   if (!stream) return;
@@ -58,18 +58,17 @@ async function alternarLanterna() {
   } catch(e) {}
 }
 
-// Função utilitária para extrair apenas números de uma HU
+// Higieniza strings para extrair apenas números
 function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// Atualização do Dashboard e Quantidades
+// Busca e Atualiza o Dashboard e as HUs
 async function atualizarDashboard() {
   try {
     const res = await fetch(SCRIPT_URL);
     const data = await res.json();
     
-    // Atualiza contadores numéricos
     const qtdEncontradas = parseInt(data.encontradas || 0, 10);
     const qtdPendentes = parseInt(data.pendentes || 0, 10);
 
@@ -88,9 +87,8 @@ async function atualizarDashboard() {
   }
 }
 
-// Renderiza APENAS os 5 últimos dígitos nos chips da lista de pendentes
+// Exibe na lista inferior APENAS os 5 últimos dígitos de cada HU pendente
 function renderizarListaPendentes(lista) {
-  // Salva na memória global a HU original
   listaPendentesGlobal = lista.map(item => extrairNumeros(item)).filter(item => item.length > 0);
   
   if (badgeContador) {
@@ -101,14 +99,13 @@ function renderizarListaPendentes(lista) {
     containerListaHus.innerHTML = `
       <div class="lista-vazia">
         <span>🎉 PARABÉNS!</span>
-        <span>Todas as HUs foram bipadas.</span>
+        <span>Todas as HUs foram bipadas com sucesso.</span>
       </div>`;
     return;
   }
 
-  // Gera os quadros exibindo apenas os 5 últimos dígitos da HU completa
   containerListaHus.innerHTML = listaPendentesGlobal.map(huCompleta => {
-    // Pega exatamente os últimos 5 dígitos (ex: de '178910240423291973' pega '91973')
+    // Pega exatamente os últimos 5 dígitos (ex: de '178910240423291973' exibe '91973')
     const ultimos5 = huCompleta.length >= 5 ? huCompleta.slice(-5) : huCompleta;
 
     return `
@@ -118,7 +115,7 @@ function renderizarListaPendentes(lista) {
   }).join('');
 }
 
-// Remove instantaneamente o chip da tela quando a HU é lida
+// Remove o card visual do final de 5 dígitos imediatamente ao bipar
 function removerHuDaListaVisual(huEncontrada) {
   const huLimpa = extrairNumeros(huEncontrada);
   const ultimos5 = huLimpa.slice(-5);
@@ -128,20 +125,17 @@ function removerHuDaListaVisual(huEncontrada) {
   chips.forEach(chip => {
     const huAtributo = chip.getAttribute('data-hu');
     
-    // Compara a HU inteira de 18 dígitos OU o final de 5 dígitos
     if (huAtributo === huLimpa || (huAtributo && huAtributo.endsWith(ultimos5))) {
       chip.classList.add('removendo');
       setTimeout(() => {
         chip.remove();
         
-        // Atualiza a lista na memória
         listaPendentesGlobal = listaPendentesGlobal.filter(item => item !== huAtributo && !item.endsWith(ultimos5));
         
         if (badgeContador) {
           badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
         }
 
-        // Atualiza contadores do topo em tempo real
         const elFaltam = document.getElementById('qtd-faltam');
         const elEncontradas = document.getElementById('qtd-encontradas');
         
@@ -161,7 +155,7 @@ function removerHuDaListaVisual(huEncontrada) {
   });
 }
 
-// Câmera
+// Ativa a Câmera
 navigator.mediaDevices.getUserMedia({ 
   video: { 
     facingMode: "environment", 
@@ -180,22 +174,22 @@ navigator.mediaDevices.getUserMedia({
 
 // Inicialização Tesseract OCR
 async function iniciarOCR() {
-  dicaStatusEl.innerText = "⚡ Carregando leitor de código...";
+  dicaStatusEl.innerText = "⚡ Inicializando leitor WMS/HU...";
   
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789',
+    tessedit_char_whitelist: '0123456789WMSwms',
     tessedit_pageseg_mode: '6',
   });
 
-  dicaStatusEl.innerText = "🟢 Aponte para a HU (18 DÍGITOS - 1789...)";
+  dicaStatusEl.innerText = "🟢 Enquadre o número 1789 da HU";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopOCR();
 }
 
-// Processamento de imagem em P&B para leitura rápida
+// Filtro P&B (Otsu) para nitidez extrema do código impresso
 function aplicarBinarizacaoOtsu(ctx, width, height) {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
@@ -238,7 +232,7 @@ function aplicarBinarizacaoOtsu(ctx, width, height) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// Loop de Leitura da Câmera (PROCURA OS 18 CARACTERES)
+// Loop Principal de Leitura da Câmera
 async function loopOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopOCR, 150);
@@ -252,21 +246,32 @@ async function loopOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      const CROP_W = vw * 0.92;
-      const CROP_H = vh * 0.22;
+      // Recorte otimizado para pegar o código impresso na etiqueta WMS
+      const CROP_W = vw * 0.90;
+      const CROP_H = vh * 0.28; // Recorte fino para não capturar letras e datas do lote
       
       canvas.width = CROP_W * 2;
       canvas.height = CROP_H * 2;
       const ctx = canvas.getContext('2d');
       
-      ctx.drawImage(video, vw * 0.04, vh * 0.28, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, vw * 0.05, vh * 0.36, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
       aplicarBinarizacaoOtsu(ctx, canvas.width, canvas.height);
 
       const result = await workerOCR.recognize(canvas);
       const rawText = result.data.text || "";
+
+      // Verifica se identificou etiqueta padrão WMS
+      const temWMS = /WMS/i.test(rawText);
+      if (temWMS) {
+        modoLeituraEl.innerText = "🏷️ ETIQUETA WMS DETECTADA";
+      } else {
+        modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
+      }
+
+      // Isola APENAS a sequência numérica
       const textoLimpo = rawText.replace(/[^\d]/g, '');
 
-      // PROCURA OBRIGATORIAMENTE O CÓDIGO DE 18 DÍGITOS COMEÇANDO COM 1789
+      // REGEX CRÍTICO: PROCURA OBRIGATORIAMENTE OS 18 DÍGITOS COMEÇANDO COM 1789
       const REGEX_HU_18 = /1789\d{14}/;
       const match = textoLimpo.match(REGEX_HU_18);
 
@@ -275,8 +280,7 @@ async function loopOCR() {
       if (huEncontrada) {
         numerosLidosEl.innerText = huEncontrada;
         contadorDigitosEl.innerText = "18 / 18";
-        modoLeituraEl.innerText = "🎯 HU 18 DÍGITOS RECONHECIDA";
-        dicaStatusEl.innerText = "✓ Validando HU...";
+        dicaStatusEl.innerText = "✓ HU 18 DÍGITOS VALIDADA!";
         dicaStatusEl.style.color = "#00e676";
         
         miraBox.classList.remove('lendo');
@@ -290,12 +294,12 @@ async function loopOCR() {
           const parcial = textoLimpo.substring(indexInicio, indexInicio + 18);
           numerosLidosEl.innerText = parcial;
           contadorDigitosEl.innerText = `${parcial.length} / 18`;
-          dicaStatusEl.innerText = "👁️ Lendo HU (1789...)";
+          dicaStatusEl.innerText = "👁️ Lendo sequência 1789...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           numerosLidosEl.innerText = "Aguardando 1789...";
           contadorDigitosEl.innerText = "0 / 18";
-          dicaStatusEl.innerText = "🟢 Enquadre a HU de 18 dígitos";
+          dicaStatusEl.innerText = "🟢 Posicione a linha 1789 na mira";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -308,7 +312,7 @@ async function loopOCR() {
   setTimeout(loopOCR, 150);
 }
 
-// Envia a HU inteira (18 dígitos) para a planilha
+// Envia a HU completa de 18 dígitos para a planilha
 async function verificarHU(huCompleta) {
   processandoHU = true;
   try {
@@ -322,10 +326,9 @@ async function verificarHU(huCompleta) {
       tocarBip();
       
       const ultimos5 = huCompleta.slice(-5);
-      huNotificacaoTexto.innerText = `HU: ...${ultimos5}`;
+      huNotificacaoTexto.innerText = `...${ultimos5} (${huCompleta})`;
       notificacaoEl.style.display = 'block';
       
-      // Remove da lista de pendentes e atualiza os cards de topo
       removerHuDaListaVisual(huCompleta);
 
       setTimeout(() => {
@@ -335,7 +338,7 @@ async function verificarHU(huCompleta) {
       }, 1800);
 
     } else if (data.status === "ja_lido") {
-      dicaStatusEl.innerText = `⚠️ HU ${huCompleta.slice(-5)} já foi bipada!`;
+      dicaStatusEl.innerText = `⚠️ HU ${huCompleta.slice(-5)} já foi lida!`;
       dicaStatusEl.style.color = "#ff9800";
       setTimeout(() => { resetarVisor(); processandoHU = false; }, 1800);
     } else {
@@ -355,10 +358,10 @@ function resetarVisor() {
   numerosLidosEl.innerText = "Aguardando 1789...";
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
-  dicaStatusEl.innerText = "🟢 Aponte para a HU (1789...)";
+  dicaStatusEl.innerText = "🟢 Posicione a linha 1789 na mira";
   dicaStatusEl.style.color = "#00e676";
 }
 
-// Chamadas iniciais
+// Inicialização
 atualizarDashboard();
 setInterval(atualizarDashboard, 5000);
