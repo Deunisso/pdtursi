@@ -26,7 +26,6 @@ if (!canvasOverlay) {
   video.parentElement.appendChild(canvasOverlay);
 }
 
-// Estado dos Elementos
 let elementosHUDAtivos = [];
 let animOffset = 0;
 let ocrAtivo = false;
@@ -55,7 +54,7 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Inicializa Câmera otimizada para PAISAGEM
+// Inicializa Câmera
 navigator.mediaDevices.getUserMedia({ 
   video: { 
     facingMode: "environment", 
@@ -104,42 +103,27 @@ function renderizarHUDLoop() {
     const scaleY = canvasOverlay.height / video.videoHeight;
 
     elementosHUDAtivos.forEach(item => {
-      const { bbox, rotulo, corRGB, tipo } = item;
+      const { bbox, corRGB, tipo } = item;
       if (!bbox) return;
 
       const x = bbox.x0 * scaleX;
       const y = bbox.y0 * scaleY;
       const w = (bbox.x1 - bbox.x0) * scaleX;
       const h = (bbox.y1 - bbox.y0) * scaleY;
-      const radius = 6;
 
-      // Fundo Gradiente Futuro
-      const grad = ctx.createLinearGradient(x, y, x, y + h);
-      grad.addColorStop(0, `rgba(${corRGB}, 0.25)`);
-      grad.addColorStop(1, `rgba(${corRGB}, 0.05)`);
-      
-      ctx.beginPath();
-      ctx.roundRect(x, y, w, h, radius);
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Borda Neon
+      // Retângulo com brilho
       ctx.lineWidth = 2;
       ctx.strokeStyle = `rgba(${corRGB}, 0.9)`;
-      ctx.stroke();
+      ctx.strokeRect(x, y, w, h);
 
-      // Laser de Varredura
       if (tipo === 'TARGET') {
         const scanY = y + (h * (animOffset / 100));
         ctx.beginPath();
-        ctx.moveTo(x + 2, scanY);
-        ctx.lineTo(x + w - 2, scanY);
+        ctx.moveTo(x, scanY);
+        ctx.lineTo(x + w, scanY);
         ctx.strokeStyle = `rgba(${corRGB}, 1)`;
         ctx.lineWidth = 2;
-        ctx.shadowColor = `rgb(${corRGB})`;
-        ctx.shadowBlur = 8;
         ctx.stroke();
-        ctx.shadowBlur = 0;
       }
     });
   }
@@ -161,7 +145,7 @@ async function loopLeituraOCR() {
     if (vw > 0 && vh > 0) {
       const novosElementos = [];
 
-      // 1. BARCODE DETECTION
+      // BARCODE
       if (detectorBarra) {
         try {
           const codigos = await detectorBarra.detect(video);
@@ -186,10 +170,9 @@ async function loopLeituraOCR() {
 
               elementosHUDAtivos = novosElementos;
 
-              if (modoLeituraEl) modoLeituraEl.innerText = "⚡ BARCODE LIDO";
+              if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
               if (spanNumsEstabilizados) spanNumsEstabilizados.innerText = huEncontrada;
               if (spanNumsAtivos) spanNumsAtivos.innerText = "";
-              if (contadorDigitosEl) contadorDigitosEl.innerText = "18 / 18";
 
               await verificarHU(huEncontrada);
               return;
@@ -198,7 +181,7 @@ async function loopLeituraOCR() {
         } catch (eBarra) {}
       }
 
-      // 2. DETECÇÃO TEXTO (WMS + SSCC)
+      // TEXTO OCR
       canvas.width = vw;
       canvas.height = vh;
       const ctx = canvas.getContext('2d');
@@ -224,10 +207,9 @@ async function loopLeituraOCR() {
 
         elementosHUDAtivos = novosElementos;
 
-        if (modoLeituraEl) modoLeituraEl.innerText = "🔒 HU DETECTADA";
+        if (modoLeituraEl) modoLeituraEl.innerText = "HU DETECTADA!";
         if (spanNumsEstabilizados) spanNumsEstabilizados.innerText = huEncontrada;
         if (spanNumsAtivos) spanNumsAtivos.innerText = "";
-        if (contadorDigitosEl) contadorDigitosEl.innerText = "18 / 18";
 
         await verificarHU(huEncontrada);
         return;
@@ -245,21 +227,18 @@ async function loopLeituraOCR() {
   }
 }
 
-// CONEXÃO CORRIGIDA COM GOOGLE APPS SCRIPT
+// CONEXÃO COM GOOGLE APPS SCRIPT
 async function verificarHU(huCompleta) {
   const timerSeguranca = setTimeout(() => {
     if (processandoHU) resetarVisor();
   }, 5000);
 
   try {
-    // Usando text/plain para evitar bloqueios de Preflight CORS no Apps Script
-    const res = await fetch(SCRIPT_URL, {
+    await fetch(SCRIPT_URL, {
       method: 'POST',
       mode: 'cors',
       redirect: 'follow',
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8'
-      },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ hu: huCompleta })
     });
 
@@ -267,7 +246,6 @@ async function verificarHU(huCompleta) {
     tocarBip();
     setTimeout(resetarVisor, 1000);
   } catch (e) {
-    console.error("Erro na integração Apps Script:", e);
     clearTimeout(timerSeguranca);
     setTimeout(resetarVisor, 1000);
   }
@@ -276,9 +254,8 @@ async function verificarHU(huCompleta) {
 function resetarVisor() {
   elementosHUDAtivos = [];
   if (spanNumsEstabilizados) spanNumsEstabilizados.innerText = "";
-  if (spanNumsAtivos) spanNumsAtivos.innerText = "1789????????????";
-  if (contadorDigitosEl) contadorDigitosEl.innerText = "0 / 18";
-  if (modoLeituraEl) modoLeituraEl.innerText = "PROCURANDO...";
+  if (spanNumsAtivos) spanNumsAtivos.innerText = ""; // Limpo sem os ????
+  if (modoLeituraEl) modoLeituraEl.innerText = "ESCANEANDO...";
 
   processandoHU = false;
   ocrAtivo = true;
