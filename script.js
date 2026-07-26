@@ -2,10 +2,11 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
 let listaHUs = [];
+let tamanhosValidosHUs = new Set(); // Guarda dinamicamente os tamanhos das suas HUs
 let html5QrCode;
 let aguardandoProcessamento = false;
 
-// Remove parênteses e caracteres não numéricos
+// Remove caracteres não numéricos
 function limparCodigoHU(textoRaw) {
   return String(textoRaw).replace(/[^\d]/g, '').trim();
 }
@@ -25,7 +26,7 @@ async function iniciarAplicacao() {
   setInterval(carregarDadosSilenciosamente, 10000);
 }
 
-// Busca a lista na Planilha do Google
+// Busca a lista na Planilha do Google e identifica o tamanho dos códigos
 async function carregarDadosSilenciosamente() {
   if (aguardandoProcessamento) return;
   const dot = document.getElementById('sync-dot');
@@ -40,6 +41,17 @@ async function carregarDadosSilenciosamente() {
     const dados = await response.json();
     if (Array.isArray(dados)) {
       listaHUs = dados;
+      
+      // Mapeia automaticamente o tamanho das HUs cadastradas na planilha
+      tamanhosValidosHUs.clear();
+      listaHUs.forEach(item => {
+        const limpo = limparCodigoHU(item.hu);
+        if (limpo.length > 0) {
+          tamanhosValidosHUs.add(limpo.length);
+          tamanhosValidosHUs.add(limpo.length + 2); // Permite variação com prefixo "00"
+        }
+      });
+
       atualizarContadores();
       if (dot) dot.className = "dot";
       if (texto) texto.innerText = "OK";
@@ -88,19 +100,21 @@ async function onScanSuccess(decodedText) {
 
   const codigoLido = limparCodigoHU(decodedText);
 
-  // 🛡️ TRAVA DE SEGURANÇA CONTRA LEITURA PARCIAL:
-  // Se o código lido tiver menos de 18 dígitos, ignora! (Evita leituras cortadas da etiqueta)
-  if (codigoLido.length !== 18 && codigoLido.length !== 20) {
-    console.warn(`Leitura parcial ignorada: ${codigoLido} (${codigoLido.length} dígitos)`);
-    return; // Descarta silenciosamente e continua escaneando até pegar o código inteiro
+  // Ignora ruídos rápidos de câmera com menos de 6 dígitos
+  if (codigoLido.length < 6) return;
+
+  // Se a planilha já carregou, valida se o código lido tem o tamanho exato dos códigos da planilha
+  if (tamanhosValidosHUs.size > 0 && !tamanhosValidosHUs.has(codigoLido.length)) {
+    console.warn(`Leitura parcial/inválida ignorada: ${codigoLido} (${codigoLido.length} dígitos)`);
+    return; // Descarta leituras cortadas e continua lendo
   }
 
-  // Busca Inteligente
+  // Busca Inteligente na Lista
   const itemExistente = listaHUs.find(i => {
     const huPlanilha = limparCodigoHU(String(i.hu));
     if (huPlanilha === codigoLido) return true;
-    if (codigoLido.length === 20 && codigoLido.startsWith('00') && huPlanilha === codigoLido.substring(2)) return true;
-    if (huPlanilha.length === 20 && huPlanilha.startsWith('00') && codigoLido === huPlanilha.substring(2)) return true;
+    if (codigoLido.length === huPlanilha.length + 2 && codigoLido.startsWith('00') && codigoLido.endsWith(huPlanilha)) return true;
+    if (huPlanilha.length === codigoLido.length + 2 && huPlanilha.startsWith('00') && huPlanilha.endsWith(codigoLido)) return true;
     return false;
   });
 
@@ -132,37 +146,43 @@ async function onScanSuccess(decodedText) {
   }
 }
 
-// Inicia a câmera focando puramente em CODE_128
+// Inicia a câmera com estabilidade universal
 async function iniciarCamera() {
   try {
-    html5QrCode = new Html5Qrcode("reader", {
-      formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ] // Foco exclusivo em etiquetas logísticas
-    });
+    if (html5QrCode) {
+      try { await html5QrCode.stop(); } catch(e){}
+    }
+
+    html5QrCode = new Html5Qrcode("reader");
 
     const config = { 
-      fps: 30, // Máxima velocidade de varredura
-      disableFlip: false,
+      fps: 20,
       qrbox: function(viewfinderWidth, viewfinderHeight) {
-        // Mira larga e fina, ideal para GS1-128
-        return { 
-          width: Math.floor(viewfinderWidth * 0.90), 
-          height: Math.floor(viewfinderHeight * 0.35) 
-        };
-      },
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+        // Caixas de leitura largas ideais para etiquetas de galpão
+        const width = Math.floor(viewfinderWidth * 0.90);
+        const height = Math.floor(viewfinderHeight * 0.40);
+        return { width: width, height: height };
+      }
     };
 
-    await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
+    await html5QrCode.start(
+      { facingMode: "environment" }, 
+      config, 
+      onScanSuccess, 
+      () => {}
+    );
 
   } catch (err) {
+    console.warn("Tentando fallback de câmera...", err);
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices && devices.length > 0) {
         const cameraId = devices[devices.length - 1].id;
-        await html5QrCode.start(cameraId, { fps: 25 }, onScanSuccess, () => {});
+        await html5QrCode.start(cameraId, { fps: 20 }, onScanSuccess, () => {});
       }
     } catch (errFallback) {
-      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Verifique as permissões do navegador.", "alerta");
+      console.error("Erro ao abrir câmera:", errFallback);
+      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Permita o uso da câmera no navegador.", "alerta");
     }
   }
 }
