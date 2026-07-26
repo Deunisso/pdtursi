@@ -22,10 +22,11 @@ const canvas = document.getElementById('canvas-processamento');
 let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
+let detectorBarra = null;
 let lanternaLigada = false;
 let listaPendentesGlobal = [];
 
-// Som de Bip
+// 🔔 Som de Bip
 function tocarBip() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -59,10 +60,12 @@ async function alternarLanterna() {
   }
 }
 
+// Helper para extrair apenas números
 function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
+// 📊 Dashboard
 async function atualizarDashboard() {
   try {
     const res = await fetch(SCRIPT_URL);
@@ -116,7 +119,7 @@ function removerHuDaListaVisual(huEncontrada) {
   });
 }
 
-// Câmera HD
+// 📷 Inicialização da Câmera HD
 navigator.mediaDevices.getUserMedia({ 
   video: { 
     facingMode: "environment", 
@@ -133,23 +136,54 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização Sem Trava de Whitelist (Permite leitura natural de longe)
+// 🚀 Inicialização Híbrida: BarcodeDetector + OCR Tesseract
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Modo Longa Distância Ativado...";
+  dicaStatusEl.innerText = "⚡ Inicializando leitor otimizado...";
 
+  // 1. Inicializa o Leitor Nativo de Código de Barras (se suportado pelo navegador)
+  if ('BarcodeDetector' in window) {
+    try {
+      detectorBarra = new BarcodeDetector({
+        formats: ['code_128', 'code_39', 'ean_13', 'upc_a', 'data_matrix', 'qr_code']
+      });
+      console.log("✅ Leitor de código de barras nativo ativado.");
+    } catch (e) {
+      console.warn("BarcodeDetector não suportado neste formato.", e);
+    }
+  }
+
+  // 2. Inicializa o OCR Tesseract focado apenas em DÍGITOS
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_pageseg_mode: '11', // PSM 11: Detecta textos soltos de longe sem se perder na estrutura da tabela
+    tessedit_char_whitelist: '0123456789', // Trava OCR para aceitar APENAS números
+    tessedit_pageseg_mode: '6',           // PSM 6: Trata como um bloco de texto único
   });
 
-  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta (Qualquer distância)";
+  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta ou código de barras";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// Loop com Ampla Visão
+// 🎨 Tratamento da Imagem: Converte em Preto e Branco Puro (Binarização)
+function preProcessarCanvas(ctx, width, height) {
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const d = imgData.data;
+  const threshold = 125; 
+
+  for (let i = 0; i < d.length; i += 4) {
+    const avg = (d[i] + d[i + 1] + d[i + 2]) / 3;
+    const color = avg > threshold ? 255 : 0;
+    d[i] = color;     
+    d[i + 1] = color; 
+    d[i + 2] = color; 
+  }
+  
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// 🔍 LOOP HÍBRIDO DE LEITURA (BARCODE + OCR)
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 80);
@@ -163,36 +197,68 @@ async function loopLeituraOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // Captura ampla para ler mesmo se a etiqueta estiver pequena/distante
-      const CROP_W = vw * 0.90;  
-      const CROP_H = vh * 0.70;  
-      const CROP_X = vw * 0.05;  
-      const CROP_Y = vh * 0.15;  
+      // 📌 CAMADA 1: DETECÇÃO DIRETA DO CÓDIGO DE BARRAS NO VÍDEO INTEIRO (SUPER RÁPIDO)
+      if (detectorBarra) {
+        const codigos = await detectorBarra.detect(video);
+        for (const codigo of codigos) {
+          const numerosBarra = extrairNumeros(codigo.rawValue);
+          const matchBarra = numerosBarra.match(/1789\d{14}/);
+
+          if (matchBarra && !processandoHU) {
+            const huEncontrada = matchBarra[0];
+            processandoHU = true;
+
+            modoLeituraEl.innerText = "⚡ BARCODE LIDO COM SUCESSO!";
+            spanNumsEstabilizados.innerText = huEncontrada;
+            spanNumsAtivos.innerText = "";
+            contadorDigitosEl.innerText = "18 / 18";
+
+            dicaStatusEl.innerText = "✓ CÓDIGO DE BARRAS CAPTURADO!";
+            dicaStatusEl.style.color = "#00e676";
+
+            miraBox.classList.remove('lendo');
+            miraBox.classList.add('sucesso');
+
+            await verificarHU(huEncontrada);
+            return;
+          }
+        }
+      }
+
+      // 📌 CAMADA 2: OCR OTIMIZADO NA REGIÃO DO SSCC (TEXTO)
+      // Recorte ajustado para pegar o SSCC e desconsiderar 'MATERIAL ABR...' e ruídos inferiores
+      const CROP_W = vw * 0.70;  
+      const CROP_H = vh * 0.30;  
+      const CROP_X = vw * 0.08;  
+      const CROP_Y = vh * 0.20;  
 
       canvas.width = CROP_W;
       canvas.height = CROP_H;
       
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, CROP_W, CROP_H);
 
-      // Leitura nativa
+      // Aplica filtro binarizador para destacar os números do SSCC
+      preProcessarCanvas(ctx, CROP_W, CROP_H);
+
+      // OCR reconhece a região binarizada
       const result = await workerOCR.recognize(canvas);
       const textoBruto = result.data.text || "";
       const numerosPuros = extrairNumeros(textoBruto);
 
-      // PROCURA O PADRÃO: 1789 + 14 números (Total 18)
-      const match = numerosPuros.match(/1789\d{14}/);
+      // Busca exata pelo padrão: 1789 + 14 dígitos (18 dígitos)
+      const matchOCR = numerosPuros.match(/1789\d{14}/);
 
-      if (match && !processandoHU) {
-        const huEncontrada = match[0];
+      if (matchOCR && !processandoHU) {
+        const huEncontrada = matchOCR[0];
         processandoHU = true;
 
-        modoLeituraEl.innerText = "🔒 HU LIDA COM SUCESSO!";
+        modoLeituraEl.innerText = "🔒 HU TEXTO LIDA COM SUCESSO!";
         spanNumsEstabilizados.innerText = huEncontrada;
         spanNumsAtivos.innerText = "";
         contadorDigitosEl.innerText = "18 / 18";
 
-        dicaStatusEl.innerText = "✓ LEITURA CONCLUÍDA!";
+        dicaStatusEl.innerText = "✓ LEITURA TEXTUAL CONCLUÍDA!";
         dicaStatusEl.style.color = "#00e676";
 
         miraBox.classList.remove('lendo');
@@ -221,22 +287,22 @@ async function loopLeituraOCR() {
           contadorDigitosEl.innerText = "0 / 18";
 
           modoLeituraEl.innerText = "PROCURANDO ETIQUETA...";
-          dicaStatusEl.innerText = "🟢 Aponta para a etiqueta";
+          dicaStatusEl.innerText = "🟢 Aponta para a etiqueta ou barcode";
           dicaStatusEl.style.color = "#00e676";
         }
       }
     }
     miraBox.classList.remove('lendo');
   } catch (e) {
-    console.error("Erro no OCR:", e);
+    console.error("Erro no processamento:", e);
   }
 
   if (!processandoHU) {
-    setTimeout(loopLeituraOCR, 80);
+    setTimeout(loopLeituraOCR, 70);
   }
 }
 
-// Comunicação Planilha
+// 📡 Comunicação com a Planilha (Google Apps Script)
 async function verificarHU(huCompleta) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -275,6 +341,7 @@ async function verificarHU(huCompleta) {
   }
 }
 
+// 🔄 Reset do Visor
 function resetarVisor() {
   miraBox.classList.remove('sucesso');
   
@@ -283,7 +350,7 @@ function resetarVisor() {
   
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "PROCURANDO ETIQUETA...";
-  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta";
+  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta ou barcode";
   dicaStatusEl.style.color = "#00e676";
   
   const ctx = canvas.getContext('2d');
@@ -293,6 +360,6 @@ function resetarVisor() {
   setTimeout(loopLeituraOCR, 100);
 }
 
-// Start
+// 🚀 Start das Requisições de Dashboard
 atualizarDashboard();
 setInterval(atualizarDashboard, 5000);
