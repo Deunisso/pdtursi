@@ -260,16 +260,15 @@ video {
 
 .hu-chip {
   background: #1c1c2b;
-  border: 1px solid #33334a;
-  color: #ddd;
+  border: 1px solid #00d2ff;
+  color: #ffd700;
   font-family: 'Courier New', monospace;
-  font-size: 12px;
-  font-weight: bold;
-  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 900;
+  padding: 6px 12px;
   border-radius: 6px;
   display: flex;
   align-items: center;
-  gap: 6px;
   transition: all 0.3s ease;
 }
 
