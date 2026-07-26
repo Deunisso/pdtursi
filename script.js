@@ -12,7 +12,7 @@ const dicaStatusEl = document.getElementById('dica-status');
 const modoLeituraEl = document.getElementById('modo-leitura');
 const canvas = document.getElementById('canvas-processamento');
 
-// Controle de estado
+// Estado
 let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
@@ -51,7 +51,6 @@ navigator.mediaDevices.getUserMedia({
 async function iniciarSistemaLeitura() {
   dicaStatusEl.innerText = "⚡ Carregando visão...";
 
-  // Inicializa o leitor nativo de código de barras
   if ('BarcodeDetector' in window) {
     try {
       detectorBarra = new BarcodeDetector({ 
@@ -60,7 +59,6 @@ async function iniciarSistemaLeitura() {
     } catch (e) {}
   }
 
-  // Inicializa o Tesseract para OCR de texto
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
     tessedit_char_whitelist: '0123456789',
@@ -74,7 +72,7 @@ async function iniciarSistemaLeitura() {
   loopLeituraOCR();
 }
 
-// 🔍 LOOP DE PROCESSAMENTO (BARCODE + OCR)
+// 🔍 LOOP DE PROCESSAMENTO DIRETO (SEM ENGINE GRÁFICA)
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 80);
@@ -87,7 +85,7 @@ async function loopLeituraOCR() {
 
     if (vw > 0 && vh > 0) {
 
-      // 📌 1. LEITURA RÁPIDA VIA CÓDIGO DE BARRAS (Hardware native)
+      // 1. Detecção nativa por Código de Barras
       if (detectorBarra) {
         try {
           const codigos = await detectorBarra.detect(video);
@@ -104,15 +102,14 @@ async function loopLeituraOCR() {
         } catch (eBarra) {}
       }
 
-      // 📌 2. LEITURA VIA OCR (Texto impresso)
+      // 2. Detecção por Texto (OCR)
       canvas.width = vw;
       canvas.height = vh;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, vw, vh);
 
       const result = await workerOCR.recognize(canvas);
-      const textoCompleto = result.data.text || "";
-      const numerosTexto = extrairNumeros(textoCompleto);
+      const numerosTexto = extrairNumeros(result.data.text);
       const matchTexto = numerosTexto.match(/1789\d{14}/);
 
       if (matchTexto && !processandoHU) {
