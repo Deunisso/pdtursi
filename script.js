@@ -70,10 +70,12 @@ async function alternarLanterna() {
   } catch(e) {}
 }
 
+// Higieniza strings para extrair apenas números
 function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
+// Busca e Atualiza o Dashboard e as HUs na Planilha
 async function atualizarDashboard() {
   try {
     const res = await fetch(SCRIPT_URL);
@@ -97,6 +99,7 @@ async function atualizarDashboard() {
   }
 }
 
+// Exibe na lista inferior os 5 últimos dígitos de cada HU pendente
 function renderizarListaPendentes(lista) {
   listaPendentesGlobal = lista.map(item => extrairNumeros(item)).filter(item => item.length > 0);
   
@@ -122,19 +125,26 @@ function renderizarListaPendentes(lista) {
   }).join('');
 }
 
+// Remove o card visual ao bipar
 function removerHuDaListaVisual(huEncontrada) {
   const huLimpa = extrairNumeros(huEncontrada);
   const ultimos5 = huLimpa.slice(-5);
+  
   const chips = containerListaHus.querySelectorAll('.hu-chip');
   
   chips.forEach(chip => {
     const huAtributo = chip.getAttribute('data-hu');
+    
     if (huAtributo === huLimpa || (huAtributo && huAtributo.endsWith(ultimos5))) {
       chip.classList.add('removendo');
       setTimeout(() => {
         chip.remove();
+        
         listaPendentesGlobal = listaPendentesGlobal.filter(item => item !== huAtributo && !item.endsWith(ultimos5));
-        if (badgeContador) badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
+        
+        if (badgeContador) {
+          badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
+        }
 
         const elFaltam = document.getElementById('qtd-faltam');
         const elEncontradas = document.getElementById('qtd-encontradas');
@@ -142,16 +152,20 @@ function removerHuDaListaVisual(huEncontrada) {
         if (elFaltam && elEncontradas) {
           let faltam = parseInt(elFaltam.innerText || "0", 10);
           let encontradas = parseInt(elEncontradas.innerText || "0", 10);
+          
           if (faltam > 0) elFaltam.innerText = faltam - 1;
           elEncontradas.innerText = encontradas + 1;
         }
 
-        if (listaPendentesGlobal.length === 0) renderizarListaPendentes([]);
+        if (listaPendentesGlobal.length === 0) {
+          renderizarListaPendentes([]);
+        }
       }, 300);
     }
   });
 }
 
+// Binarização Otsu para Nitidez do OCR
 function aplicarBinarizacaoOtsu(ctx, width, height) {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
@@ -194,6 +208,7 @@ function aplicarBinarizacaoOtsu(ctx, width, height) {
   ctx.putImageData(imgData, 0, 0);
 }
 
+// Ativa a Câmera
 navigator.mediaDevices.getUserMedia({ 
   video: { 
     facingMode: "environment", 
@@ -210,6 +225,7 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
+// Inicializa ZXing + Tesseract
 async function iniciarSistemaLeitura() {
   dicaStatusEl.innerText = "⚡ Inicializando leitor WMS/HU...";
   
@@ -223,13 +239,14 @@ async function iniciarSistemaLeitura() {
     tessedit_pageseg_mode: '6',
   });
 
-  dicaStatusEl.innerText = "🔴 LASER ATIVO: Posicione a etiqueta WMS";
-  dicaStatusEl.style.color = "#ff1744";
+  dicaStatusEl.innerText = "🟢 Enquadre a etiqueta WMS / 1789";
+  dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraHibrida();
 }
 
+// Loop Principal de Leitura com Desbloqueio Garantido
 async function loopLeituraHibrida() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraHibrida, 150);
@@ -237,9 +254,7 @@ async function loopLeituraHibrida() {
   }
 
   try {
-    // ATIVA O VISUAL DE ESCANEAR (LASER VERMELHO VARRENDO)
     miraBox.classList.add('lendo');
-    miraBox.classList.remove('sucesso');
     
     const vw = video.videoWidth;
     const vh = video.videoHeight;
@@ -255,7 +270,9 @@ async function loopLeituraHibrida() {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
 
-      // 1. TENTATIVA CÓDIGO DE BARRAS
+      // =================================================================
+      // 📊 PRIORIDADE 1: CÓDIGO DE BARRAS ULTRA FINO (ZXing)
+      // =================================================================
       if (codeReader && !processandoHU) {
         try {
           const barcodeResult = await codeReader.decodeFromCanvas(canvas);
@@ -264,30 +281,30 @@ async function loopLeituraHibrida() {
             const matchBarras = textoBarras.match(/1789\d{14}/);
 
             if (matchBarras) {
-              processandoHU = true;
-              
-              // MUTAÇÃO VISUAL DE SUCESSO (LASER VERDE)
-              miraBox.classList.remove('lendo');
-              miraBox.classList.add('sucesso');
-              document.body.classList.add('flash-sucesso');
-              setTimeout(() => document.body.classList.remove('flash-sucesso'), 300);
-
-              modoLeituraEl.innerText = "📊 BARRAS DETECTADO";
+              processandoHU = true; // Trava o loop para enviar os dados
+              modoLeituraEl.innerText = "📊 CÓDIGO DE BARRAS DETECTADO";
               numerosLidosEl.innerText = matchBarras[0];
               contadorDigitosEl.innerText = "18 / 18";
-              dicaStatusEl.innerText = "⚡ LEITURA CONFIRMADA!";
+              dicaStatusEl.innerText = "⚡ BARRAS LIDO COM SUCESSO!";
               dicaStatusEl.style.color = "#00e676";
 
+              miraBox.classList.remove('lendo');
+              miraBox.classList.add('sucesso');
+              
               await verificarHU(matchBarras[0]);
               return;
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          // Normal quando não há barras no frame
+        }
       }
 
       if (processandoHU) return;
 
-      // 2. TENTATIVA OCR
+      // =================================================================
+      // 🏷️ PRIORIDADE 2 E 3: OCR DE TEXTO (WMS / 1789)
+      // =================================================================
       aplicarBinarizacaoOtsu(ctx, canvas.width, canvas.height);
 
       const result = await workerOCR.recognize(canvas);
@@ -300,24 +317,22 @@ async function loopLeituraHibrida() {
       let huEncontrada = matchOCR ? matchOCR[0] : null;
 
       if (huEncontrada && !processandoHU) {
-        processandoHU = true;
-
-        // MUTAÇÃO VISUAL DE SUCESSO (LASER VERDE)
-        miraBox.classList.remove('lendo');
-        miraBox.classList.add('sucesso');
-        document.body.classList.add('flash-sucesso');
-        setTimeout(() => document.body.classList.remove('flash-sucesso'), 300);
+        processandoHU = true; // Trava o loop para enviar os dados
 
         if (temWMS) {
-          modoLeituraEl.innerText = "🏷️ WMS CONFIRMADO";
+          modoLeituraEl.innerText = "🏷️ ETIQUETA WMS DETECTADA";
+          dicaStatusEl.innerText = "✓ WMS & HU VALIDADA!";
         } else {
           modoLeituraEl.innerText = "🔢 LEITURA DIRETA (1789)";
+          dicaStatusEl.innerText = "✓ HU COMPLETA ENCONTRADA!";
         }
 
         numerosLidosEl.innerText = huEncontrada;
         contadorDigitosEl.innerText = "18 / 18";
-        dicaStatusEl.innerText = "✓ HU 18 DÍGITOS VALIDADA!";
         dicaStatusEl.style.color = "#00e676";
+
+        miraBox.classList.remove('lendo');
+        miraBox.classList.add('sucesso');
 
         await verificarHU(huEncontrada);
         return;
@@ -325,22 +340,29 @@ async function loopLeituraHibrida() {
       } else if (!processandoHU) {
         const indexInicio = textoLimpo.indexOf('1789');
 
+        if (temWMS) {
+          modoLeituraEl.innerText = "🏷️ WMS DETECTADO - Buscando 1789...";
+        } else {
+          modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
+        }
+
         if (indexInicio !== -1) {
           const parcial = textoLimpo.substring(indexInicio, indexInicio + 18);
           numerosLidosEl.innerText = parcial;
           contadorDigitosEl.innerText = `${parcial.length} / 18`;
-          dicaStatusEl.innerText = "👁️ Deteção ativa em 1789...";
+          dicaStatusEl.innerText = "👁️ Lendo sequência 1789...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
-          numerosLidosEl.innerText = "Procurando 1789...";
+          numerosLidosEl.innerText = "Aguardando leitura...";
           contadorDigitosEl.innerText = "0 / 18";
-          dicaStatusEl.innerText = "🔴 LASER ATIVO: Buscando número...";
-          dicaStatusEl.style.color = "#ff1744";
+          dicaStatusEl.innerText = "🟢 Enquadre a etiqueta ou código de barras";
+          dicaStatusEl.style.color = "#00e676";
         }
       }
     }
+    miraBox.classList.remove('lendo');
   } catch (e) {
-    console.error(e);
+    console.error("Erro no loop:", e);
   }
 
   if (!processandoHU) {
@@ -348,6 +370,7 @@ async function loopLeituraHibrida() {
   }
 }
 
+// Envia a HU para a Planilha e Reseta
 async function verificarHU(huCompleta) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -371,36 +394,38 @@ async function verificarHU(huCompleta) {
       }, 1500);
 
     } else if (data.status === "ja_lido") {
-      dicaStatusEl.innerText = `⚠️ HU ${huCompleta.slice(-5)} já lida!`;
+      dicaStatusEl.innerText = `⚠️ HU ${huCompleta.slice(-5)} já foi lida!`;
       dicaStatusEl.style.color = "#ff9800";
       setTimeout(() => { resetarVisor(); }, 1500);
     } else {
-      dicaStatusEl.innerText = `❌ HU ${huCompleta.slice(-5)} fora da lista!`;
+      dicaStatusEl.innerText = `❌ HU ${huCompleta.slice(-5)} não está na lista!`;
       dicaStatusEl.style.color = "#ff5252";
       setTimeout(() => { resetarVisor(); }, 1500);
     }
   } catch (e) {
-    dicaStatusEl.innerText = "❌ Erro de conexão!";
+    dicaStatusEl.innerText = "❌ Erro de conexão com a Planilha.";
     dicaStatusEl.style.color = "#ff5252";
     setTimeout(() => { resetarVisor(); }, 1500);
   }
 }
 
+// Reseta a Interface e DESTRAVA o Leitor para a Próxima Leitura
 function resetarVisor() {
   miraBox.classList.remove('sucesso');
-  miraBox.classList.add('lendo');
-  numerosLidosEl.innerText = "Procurando 1789...";
+  numerosLidosEl.innerText = "Aguardando leitura...";
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
-  dicaStatusEl.innerText = "🔴 LASER ATIVO: Buscando número...";
-  dicaStatusEl.style.color = "#ff1744";
+  dicaStatusEl.innerText = "🟢 Enquadre a etiqueta ou código de barras";
+  dicaStatusEl.style.color = "#00e676";
   
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // LIBERA A CÂMERA E REINICIA O LOOP
   processandoHU = false;
   setTimeout(loopLeituraHibrida, 200);
 }
 
+// Atualização Inicial do Dashboard
 atualizarDashboard();
 setInterval(atualizarDashboard, 5000);
