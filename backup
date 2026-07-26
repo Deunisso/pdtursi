@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WMS - Leitor de HU (OCR Inteligente)</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    html, body { width: 100%; height: 100vh; overflow: hidden; background: #0b0b10; color: #fff; }
+    
+    .app-container { display: flex; flex-direction: column; height: 100vh; padding: 8px; justify-content: space-between; }
+
+    /* Topo Slim */
+    #dashboard { display: flex; justify-content: space-between; gap: 8px; height: 60px; }
+    .card { background: #161622; border-radius: 8px; flex: 1; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 3px solid #333; }
+    .card.found { border-color: #00e676; }
+    .card.missing { border-color: #ff5252; }
+    .card p { font-size: 10px; color: #aaa; text-transform: uppercase; font-weight: bold; }
+    .card h2 { font-size: 22px; margin-top: 2px; }
+    .found h2 { color: #00e676; }
+    .missing h2 { color: #ff5252; }
+
+    /* Câmera Central */
+    #video-container { position: relative; flex: 1; margin: 8px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2a2a3a; background: #000; display: flex; align-items: center; justify-content: center; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+
+    /* MIRA ADAPTATIVA (Espaço suficiente para pegar o WMS + SSCC) */
+    .mira { position: absolute; top: 30%; left: 4%; width: 92%; height: 35%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); border-radius: 8px; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 8px 12px; transition: all 0.2s ease; }
+    .mira.lendo { border-color: #ffd700; }
+    .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.15); box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 20px #00e676; }
+
+    /* Visor Interno */
+    .visor-topo { display: flex; justify-content: space-between; font-size: 10px; color: #00d2ff; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.9); }
+    .visor-numeros { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 900; color: #00e676; text-align: center; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.9); background: rgba(0,0,0,0.8); padding: 6px; border-radius: 4px; word-break: break-all; margin: auto 0; }
+    .visor-status { font-size: 10px; color: #ffd700; text-align: center; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.9); background: rgba(0,0,0,0.6); padding: 3px; border-radius: 4px; }
+
+    /* Notificação Discreta */
+    #notificacao-discreta { display: none; position: absolute; top: 12px; left: 5%; width: 90%; background: #12121a; border: 2px solid #00e676; border-radius: 8px; padding: 10px 15px; z-index: 100; box-shadow: 0 4px 15px rgba(0,230,118,0.4); text-align: left; animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    #notificacao-discreta .titulo { font-size: 11px; color: #00e676; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+    #notificacao-discreta .hu-codigo { font-family: monospace; font-size: 17px; color: #fff; font-weight: bold; margin-top: 2px; letter-spacing: 1.5px; }
+
+    @keyframes slideDown { from { transform: translateY(-30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    #canvas-processamento { display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Topo Slim -->
+    <div id="dashboard">
+      <div class="card found">
+        <p>Encontradas</p>
+        <h2 id="qtd-encontradas">-</h2>
+      </div>
+      <div class="card missing">
+        <p>Faltam</p>
+        <h2 id="qtd-faltam">-</h2>
+      </div>
+    </div>
+
+    <!-- Câmera com Detecção Inteligente -->
+    <div id="video-container">
+      <video id="webcam" autoplay playsinline></video>
+      
+      <!-- Notificação Discreta -->
+      <div id="notificacao-discreta">
+        <div class="titulo">✓ HU Registrada na Planilha</div>
+        <div id="hu-notificacao-texto" class="hu-codigo">000000000000000000</div>
+      </div>
+
+      <!-- Mira Adaptativa -->
+      <div id="mira-box" class="mira">
+        <div class="visor-topo">
+          <span id="modo-leitura">MODO: ÂNCORA WMS + DÍGITOS</span>
+          <span id="contador-digitos">0 / 18</span>
+        </div>
+        <div id="numeros-lidos" class="visor-numeros">Aguardando...</div>
+        <div id="dica-status" class="visor-status">Iniciando câmera...</div>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="canvas-processamento"></canvas>
+
+  <script>
+    // =================================================================
+    // ⚠️ COLOQUE AQUI A SUA URL DO GOOGLE APPS SCRIPT:
+    const SCRIPT_URL = "SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
+    // =================================================================
+
+    const video = document.getElementById('webcam');
+    const miraBox = document.getElementById('mira-box');
+    const numerosLidosEl = document.getElementById('numeros-lidos');
+    const contadorDigitosEl = document.getElementById('contador-digitos');
+    const dicaStatusEl = document.getElementById('dica-status');
+    const modoLeituraEl = document.getElementById('modo-leitura');
+    const notificacaoEl = document.getElementById('notificacao-discreta');
+    const huNotificacaoTexto = document.getElementById('hu-notificacao-texto');
+    const canvas = document.getElementById('canvas-processamento');
+
+    let ocrAtivo = false;
+    let processandoHU = false;
+    let workerOCR = null;
+
+    function tocarBip() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      } catch(e) {}
+    }
+
+    async function atualizarDashboard() {
+      try {
+        const res = await fetch(SCRIPT_URL);
+        const data = await res.json();
+        document.getElementById('qtd-encontradas').innerText = data.encontradas;
+        document.getElementById('qtd-faltam').innerText = data.pendentes;
+      } catch (e) {}
+    }
+
+    navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        facingMode: "environment", 
+        width: { ideal: 1920 }, 
+        height: { ideal: 1080 },
+        focusMode: "continuous"
+      } 
+    })
+    .then(stream => {
+      video.srcObject = stream;
+      iniciarOCR();
+    })
+    .catch(err => {
+      dicaStatusEl.innerText = "❌ Permita o acesso à câmera.";
+      dicaStatusEl.style.color = "#ff5252";
+    });
+
+    async function iniciarOCR() {
+      dicaStatusEl.innerText = "⚡ Carregando Reconhecimento Visual...";
+      
+      workerOCR = await Tesseract.createWorker('eng');
+      
+      // Aceita números e a palavra WMS
+      await workerOCR.setParameters({
+        tessedit_char_whitelist: '0123456789WMSwms',
+      });
+
+      dicaStatusEl.innerText = "🟢 Enquadre a palavra WMS ou o número na mira";
+      dicaStatusEl.style.color = "#00e676";
+      ocrAtivo = true;
+
+      loopOCR();
+    }
+
+    async function loopOCR() {
+      if (!ocrAtivo || processandoHU) {
+        setTimeout(loopOCR, 200);
+        return;
+      }
+
+      try {
+        miraBox.classList.add('lendo');
+        
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        
+        if (vw > 0 && vh > 0) {
+          // Crop focado na área central (30% a 65% da tela)
+          canvas.width = vw * 0.92;
+          canvas.height = vh * 0.35;
+          const ctx = canvas.getContext('2d');
+          
+          ctx.drawImage(video, vw * 0.04, vh * 0.30, vw * 0.92, vh * 0.35, 0, 0, canvas.width, canvas.height);
+
+          const result = await workerOCR.recognize(canvas);
+          const words = result.data.words || [];
+
+          // 🔍 OPÇÃO 1: Procura a palavra "WMS"
+          const wmsWord = words.find(w => /WMS/i.test(w.text));
+
+          let huEncontrada = null;
+          let metodoUsado = "";
+
+          if (wmsWord) {
+            // Se achou WMS, pega a posição Y de onde o WMS termina
+            const wmsYFim = wmsWord.bbox.y1;
+
+            // Filtra apenas os números que estão localizados ABAIXO da palavra WMS
+            const palavrasAbaixoDoWMS = words.filter(w => w.bbox.y0 >= (wmsYFim - 5));
+            const textoAbaixo = palavrasAbaixoDoWMS.map(w => w.text).join('').replace(/\D/g, '');
+
+            const matchWMS = textoAbaixo.match(/1789\d{14}/) || textoAbaixo.match(/1\d{17}/);
+            if (matchWMS) {
+              huEncontrada = matchWMS[0];
+              metodoUsado = "📍 ÂNCORA WMS DETECTADA";
+            }
+          }
+
+          // 🔍 OPÇÃO 2 (FALLBACK): Se não achou WMS ou não achou o código abaixo dele, varre a imagem inteira da mira
+          if (!huEncontrada) {
+            const todoTextoLimpo = result.data.text.replace(/\D/g, '');
+            const matchFallback = todoTextoLimpo.match(/1789\d{14}/) || todoTextoLimpo.match(/1\d{17}/);
+            if (matchFallback) {
+              huEncontrada = matchFallback[0];
+              metodoUsado = "🔍 LEITURA DIRETA SSCC";
+            }
+          }
+
+          // RESULTADO DA LEITURA
+          if (huEncontrada) {
+            numerosLidosEl.innerText = huEncontrada;
+            contadorDigitosEl.innerText = "18 / 18";
+            modoLeituraEl.innerText = metodoUsado;
+            dicaStatusEl.innerText = "🎯 SSCC Confirmado!";
+            dicaStatusEl.style.color = "#00e676";
+            
+            miraBox.classList.remove('lendo');
+            miraBox.classList.add('sucesso');
+            
+            await verificarHU(huEncontrada);
+          } else {
+            // Exibe a parcial caso esteja montando os dígitos
+            const textoGeral = result.data.text.replace(/\D/g, '');
+            if (textoGeral.length > 0) {
+              const parcial = textoGeral.substring(0, 18);
+              numerosLidosEl.innerText = parcial;
+              contadorDigitosEl.innerText = `${parcial.length} / 18`;
+              
+              if (wmsWord) {
+                dicaStatusEl.innerText = "📍 WMS localizado! Buscando número abaixo...";
+                dicaStatusEl.style.color = "#00d2ff";
+              } else {
+                dicaStatusEl.innerText = "👁️ Buscando WMS ou 18 dígitos...";
+                dicaStatusEl.style.color = "#ffd700";
+              }
+            } else {
+              numerosLidosEl.innerText = "Aguardando...";
+              contadorDigitosEl.innerText = "0 / 18";
+            }
+          }
+        }
+        miraBox.classList.remove('lendo');
+      } catch (e) {
+        console.error(e);
+      }
+
+      setTimeout(loopOCR, 200);
+    }
+
+    async function verificarHU(hu) {
+      processandoHU = true;
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          body: JSON.stringify({ hu: hu })
+        });
+        const data = await res.json();
+
+        if (data.status === "sucesso") {
+          tocarBip();
+          
+          huNotificacaoTexto.innerText = hu;
+          notificacaoEl.style.display = 'block';
+          
+          atualizarDashboard();
+
+          setTimeout(() => {
+            notificacaoEl.style.display = 'none';
+            resetarVisor();
+            processandoHU = false;
+          }, 2500);
+
+        } else if (data.status === "ja_lido") {
+          dicaStatusEl.innerText = `⚠️ HU ${hu} JÁ FOI LIDA!`;
+          dicaStatusEl.style.color = "#ff9800";
+          setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
+        } else {
+          dicaStatusEl.innerText = `❌ HU ${hu} não pertence à lista!`;
+          dicaStatusEl.style.color = "#ff5252";
+          setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
+        }
+      } catch (e) {
+        dicaStatusEl.innerText = "❌ Erro ao conectar com a Planilha.";
+        dicaStatusEl.style.color = "#ff5252";
+        setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
+      }
+    }
+
+    function resetarVisor() {
+      miraBox.classList.remove('sucesso');
+      numerosLidosEl.innerText = "Aguardando...";
+      contadorDigitosEl.innerText = "0 / 18";
+      modoLeituraEl.innerText = "MODO: ÂNCORA WMS + DÍGITOS";
+      dicaStatusEl.innerText = "🟢 Enquadre a palavra WMS ou o número na mira";
+      dicaStatusEl.style.color = "#00e676";
+    }
+
+    atualizarDashboard();
+    setInterval(atualizarDashboard, 5000);
+  </script>
+</body>
+</html>
