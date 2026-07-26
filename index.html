@@ -1,58 +1,160 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Leitor Rápido SSCC (GS1-128)</title>
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-  <style>
-    body { font-family: system-ui, sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
-    #reader { width: 100%; max-width: 500px; margin: auto; border-radius: 12px; overflow: hidden; }
-    #result { margin-top: 20px; font-size: 1.2rem; font-weight: bold; color: #2e7d32; word-break: break-all; }
-    .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Leitor Rápido SSCC (00)</title>
+    <!-- Carrega a biblioteca ZXing via CDN -->
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: system-ui, sans-serif; height: 100vh; width: 100vw; display: flex; flex-direction: column; }
+        
+        /* Contêiner da câmera em tela cheia (modo paisagem sugerido) */
+        #camera-container { flex: 1; position: relative; overflow: hidden; background: #222; display: flex; align-items: center; justify-content: center; }
+        #video-preview { height: 100%; width: 100%; object-fit: cover; }
+        
+        /* Canvas para desenhar as sobreposições de detecção */
+        #detection-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        /* Interface de Status */
+        #ui-overlay { position: absolute; top: 20px; left: 20px; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); z-index: 10; }
+        #status-label { font-size: 1.1rem; font-weight: bold; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 4px; }
+        #last-result { font-size: 1.4rem; color: #4caf50; font-weight: bold; }
+
+        /* Guia visual central */
+        #guide-box { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 150px; border: 2px solid rgba(255,255,255,0.4); border-radius: 12px; pointer-events: none; }
+        
+        /* Sugestão de Rotação para Paisagem */
+        @media screen and (orientation: portrait) {
+            body::after { content: "📱 Rotacione o celular para paisagem"; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; font-weight: bold; z-index: 9999; }
+        }
+    </style>
 </head>
 <body>
 
-  <h2>Leitor de Código SSCC / GS1</h2>
-  <div id="reader"></div>
-  
-  <div class="card" style="margin-top: 20px;">
-    <span>Último Código Lido:</span>
-    <div id="result">Aguardando leitura...</div>
-  </div>
+    <div id="camera-container">
+        <video id="video-preview" autoplay playsinline muted></video>
+        <canvas id="detection-canvas"></canvas>
+        <div id="guide-box"></div>
+    </div>
 
-  <script>
-    // Regex para validar o padrão (00) + 18 dígitos ou apenas 00 + 18 dígitos
-    const ssccRegex = /(?:^\(00\)|^00)(\d{18})$/;
+    <div id="ui-overlay">
+        <div id="status-label">Buscando Código SSCC (00)...</div>
+        <div id="last-result"></div>
+    </div>
 
-    function onScanSuccess(decodedText) {
-      // Limpa caracteres especiais do retorno se houver
-      const cleanText = decodedText.replace(/\s+/g, '');
-      
-      // Valida se é o código esperado de 18 dígitos do GS1 (00)
-      const match = cleanText.match(ssccRegex);
-      
-      if (match) {
-        const codigoFormatado = `(00)${match[1]}`;
-        document.getElementById('result').innerText = codigoFormatado;
+    <script>
+        // Configurações e Elementos
+        const video = document.getElementById('video-preview');
+        const canvas = document.getElementById('detection-canvas');
+        const context = canvas.getContext('2d');
+        const statusLabel = document.getElementById('status-label');
+        const lastResultLabel = document.getElementById('last-result');
+        const codeReader = new ZXing.MultiFormatReader();
+        const hints = new Map();
         
-        // Feedback sonoro/vibratório de leitura rápida
-        if (navigator.vibrate) navigator.vibrate(100);
-      }
-    }
+        // Foca a detecção em Code 128 (padrão do GS1-128)
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
+        codeReader.setHints(hints);
 
-    const html5QrcodeScanner = new Html5QrcodeScanner(
-      "reader", 
-      { 
-        fps: 30, // 30 quadros por segundo para leitura ultra-rápida
-        qrbox: { width: 350, height: 150 }, // Caixa retangular ideal para códigos de barras longos
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true } // Ativa aceleração de hardware nativa
-      },
-      /* verbose= */ false
-    );
+        let scanning = false;
+        let lastSuccessfulRead = '';
 
-    html5QrcodeScanner.render(onScanSuccess);
-  </script>
+        // Regex para validar o padrão (00) + 18 dígitos
+        const ssccRegex = /(?:^\(00\)|^00)(\d{18})$/;
+
+        async function startScanning() {
+            try {
+                // Seleciona a câmera traseira
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, 
+                    audio: false 
+                });
+                video.srcObject = stream;
+                video.play();
+                scanning = true;
+                
+                // Ajusta o canvas ao tamanho do vídeo
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    requestAnimationFrame(scanLoop);
+                });
+            } catch (err) {
+                console.error("Erro ao acessar a câmera:", err);
+                statusLabel.innerText = "❌ Permissão de câmera negada.";
+            }
+        }
+
+        function drawPolygon(points, color) {
+            context.beginPath();
+            context.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                context.lineTo(points[i].x, points[i].y);
+            }
+            context.closePath();
+            context.lineWidth = 10;
+            context.strokeStyle = color;
+            context.stroke();
+        }
+
+        function scanLoop() {
+            if (!scanning) return;
+
+            // Limpa o canvas para o próximo quadro
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+            try {
+                const luminanceSource = new ZXing.RGBLuminanceSource(new Uint8ClampedArray(context.getImageData(0,0,canvas.width,canvas.height).data), canvas.width, canvas.height);
+                const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+                const result = codeReader.decode(binaryBitmap);
+
+                if (result) {
+                    // Feedback Visual 1: Desenha um polígono VERDE exatamente sobre a barra identificada
+                    drawPolygon(result.getResultPoints(), '#4caf50');
+                    statusLabel.innerText = "✅ Identificado... Validando...";
+
+                    // Validação do Código SSCC (00)
+                    const cleanText = result.getText().replace(/\s+/g, '');
+                    const match = cleanText.match(ssccRegex);
+                    
+                    if (match) {
+                        const codigoFormatado = `(00)${match[1]}`;
+                        if (codigoFormatado !== lastSuccessfulRead) {
+                            lastSuccessfulRead = codigoFormatado;
+                            lastResultLabel.innerText = codigoFormatado;
+                            if (navigator.vibrate) navigator.vibrate(150); // Feedback vibratório
+                        }
+                    } else {
+                        statusLabel.innerText = "❌ Código de barras incorreto (formato inválido).";
+                    }
+                }
+            } catch (err) {
+                // ZXing lança um erro se nenhum código for encontrado no quadro, o que é normal.
+                if (err instanceof ZXing.NotFoundError) {
+                    // Feedback Visual 2: Quando NENHUM código é encontrado
+                    statusLabel.innerText = "🔍 Buscando Código SSCC (00)...";
+                    
+                    // Desenha uma linha de varredura vermelha no guia
+                    const guideBox = document.getElementById('guide-box').getBoundingClientRect();
+                    const scanLineY = (Math.sin(Date.now() / 200) * (guideBox.height / 2)) + (guideBox.height / 2);
+                    context.beginPath();
+                    context.moveTo(guideBox.left, guideBox.top + scanLineY);
+                    context.lineTo(guideBox.right, guideBox.top + scanLineY);
+                    context.lineWidth = 4;
+                    context.strokeStyle = 'rgba(255, 0, 0, 0.6)';
+                    context.stroke();
+
+                } else {
+                    console.error("Erro desconhecido durante o escaneamento:", err);
+                }
+            }
+
+            requestAnimationFrame(scanLoop);
+        }
+
+        // Inicia
+        startScanning();
+    </script>
 </body>
 </html>
