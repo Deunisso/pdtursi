@@ -136,38 +136,37 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// 🚀 Inicialização Dupla: Barcode Detector + OCR Numérico
+// 🚀 Inicialização Dupla: Barcode Detector + OCR em Modo Bloco Tolerante (PSM 6)
 async function iniciarSistemaLeitura() {
   dicaStatusEl.innerText = "⚡ Inicializando leitor otimizado...";
 
-  // 1. Ativa BarcodeDetector Nativo (se suportado pelo navegador/celular)
+  // 1. Ativa BarcodeDetector Nativo
   if ('BarcodeDetector' in window) {
     try {
       detectorBarra = new BarcodeDetector({
         formats: ['code_128', 'code_39', 'ean_13', 'upc_a', 'data_matrix', 'qr_code']
       });
     } catch (e) {
-      console.warn("BarcodeDetector não suportado no navegador.", e);
+      console.warn("BarcodeDetector não suportado.", e);
     }
   }
 
-  // 2. Ativa OCR Tesseract com foco exclusivo em LINHA ÚNICA NUMÉRICA (PSM 7)
+  // 2. OCR Tesseract com PSM 6 (Permite pequena inclinação e margem de enquadramento)
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789', // Whitelist estrita (Apenas 0 a 9)
-    tessedit_pageseg_mode: '7',           // Trata como uma linha única de texto
+    tessedit_char_whitelist: '0123456789', // Whitelist estrita (Apenas números)
+    tessedit_pageseg_mode: '6',           // PSM 6: Trata como bloco de texto flexível
   });
 
-  dicaStatusEl.innerText = "🟢 Alinhe a linha do SSCC ou código de barras";
+  dicaStatusEl.innerText = "🟢 Aponta para o SSCC ou Código de Barras";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// 🎨 Tratamento da Imagem: Upscaling (2x) + Binarização de Alto Contraste
+// 🎨 Tratamento da Imagem: Upscaling (2x) + Binarização Adaptativa
 function processarImagemDensa(ctx, cropX, cropY, cropW, cropH) {
-  // Duplica a resolução no canvas para nitidez absoluta dos contornos
   canvas.width = cropW * 2;
   canvas.height = cropH * 2;
 
@@ -180,7 +179,7 @@ function processarImagemDensa(ctx, cropX, cropY, cropW, cropH) {
   // Binarização Adaptativa
   for (let i = 0; i < d.length; i += 4) {
     const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-    const v = gray < 130 ? 0 : 255; // Limiar limpo
+    const v = gray < 130 ? 0 : 255; 
     d[i] = v;
     d[i + 1] = v;
     d[i + 2] = v;
@@ -189,7 +188,7 @@ function processarImagemDensa(ctx, cropX, cropY, cropW, cropH) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// 🔍 LOOP CONTINUO DE LEITURA (SEM TRAVAMENTOS)
+// 🔍 LOOP DE LEITURA HÍBRIDO E EXPANDIDO
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 80);
@@ -204,7 +203,7 @@ async function loopLeituraOCR() {
     
     if (vw > 0 && vh > 0) {
 
-      // 📌 CAMADA 1: DETECÇÃO DIRETA DE CÓDIGO DE BARRAS (Instantâneo)
+      // 📌 CAMADA 1: DETECÇÃO DE CÓDIGO DE BARRAS (Visão Global)
       if (detectorBarra) {
         try {
           const codigos = await detectorBarra.detect(video);
@@ -232,25 +231,25 @@ async function loopLeituraOCR() {
             }
           }
         } catch (eBarra) {
-          console.warn("Falha temporária no leitor de código de barras:", eBarra);
+          // Segue para a camada do OCR se o barcode não detectar nada neste frame
         }
       }
 
-      // 📌 CAMADA 2: RECORTE ESTREITO EXCLUSIVO DA LINHA DO SSCC (1789...)
-      // Ignora o texto MATERIAL ABR... abaixo e as quantidades à direita
-      const CROP_W = vw * 0.55;  
-      const CROP_H = vh * 0.12;  
+      // 📌 CAMADA 2: OCR COM MARGEM AMPLIADA NO SSCC (TEXTO)
+      // Caixa estendida para garantir a captura do texto mesmo em movimento
+      const CROP_W = vw * 0.65;  
+      const CROP_H = vh * 0.22;  
       const CROP_X = vw * 0.05;  
-      const CROP_Y = vh * 0.23;  
+      const CROP_Y = vh * 0.18;  
 
       const ctx = canvas.getContext('2d');
       processarImagemDensa(ctx, CROP_X, CROP_Y, CROP_W, CROP_H);
 
-      // OCR da Linha
+      // Leitura OCR
       const result = await workerOCR.recognize(canvas);
       const numerosPuros = extrairNumeros(result.data.text);
 
-      // Validação Severa: Prefix '1789' + 14 Dígitos (Total 18)
+      // Filtro de Validação: Prefixo 1789 + 14 dígitos
       const matchOCR = numerosPuros.match(/1789\d{14}/);
 
       if (matchOCR && !processandoHU) {
@@ -293,7 +292,7 @@ async function loopLeituraOCR() {
           contadorDigitosEl.innerText = "0 / 18";
 
           modoLeituraEl.innerText = "PROCURANDO ETIQUETA...";
-          dicaStatusEl.innerText = "🟢 Enquadre a linha do SSCC";
+          dicaStatusEl.innerText = "🟢 Aponta para a etiqueta";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -302,7 +301,6 @@ async function loopLeituraOCR() {
     console.error("Erro no processamento:", e);
   } finally {
     miraBox.classList.remove('lendo');
-    // Força a continuidade do loop caso nenhuma HU tenha sido validada neste frame
     if (!processandoHU) {
       setTimeout(loopLeituraOCR, 80);
     }
@@ -311,7 +309,7 @@ async function loopLeituraOCR() {
 
 // 📡 Comunicação com a Planilha (Google Apps Script)
 async function verificarHU(huCompleta) {
-  // Trava de Segurança (Watchdog): Destrava o leitor em 5s se o servidor não responder
+  // Watchdog de Segurança: destrava em 5s se o Apps Script demorar
   const timerSeguranca = setTimeout(() => {
     if (processandoHU) {
       dicaStatusEl.innerText = "⚠️ Servidor lento. Reiniciando leitor...";
@@ -359,7 +357,7 @@ async function verificarHU(huCompleta) {
   }
 }
 
-// 🔄 Reset do Visor e Liberação para Próxima Leitura
+// 🔄 Reset do Visor e Liberação do Loop
 function resetarVisor() {
   miraBox.classList.remove('sucesso', 'lendo');
   
@@ -368,14 +366,12 @@ function resetarVisor() {
   
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "PROCURANDO ETIQUETA...";
-  dicaStatusEl.innerText = "🟢 Enquadre a linha do SSCC";
+  dicaStatusEl.innerText = "🟢 Aponta para a etiqueta";
   dicaStatusEl.style.color = "#00e676";
   
-  // Limpa o Canvas de processamento
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Destrava as flags e reativa a câmera para próxima leitura
   processandoHU = false;
   ocrAtivo = true;
 
