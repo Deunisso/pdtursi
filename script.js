@@ -1,17 +1,18 @@
-// ⚠️ COLE AQUI A URL DO SEU GOOGLE APPS SCRIPT
+// ⚠️ URL DO SEU GOOGLE APPS SCRIPT
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
 let listaHUs = [];
 let html5QrCode;
 let aguardandoProcessamento = false;
 
-// Remove parênteses e caracteres não numéricos do código lido
+// Limpa caracteres especiais deixando apenas os dígitos do código lido
 function limparCodigoHU(textoRaw) {
   return String(textoRaw).replace(/[^\d]/g, '').trim();
 }
 
 async function iniciarAplicacao() {
-  document.getElementById('overlay-inicio').style.display = 'none';
+  const overlay = document.getElementById('overlay-inicio');
+  if (overlay) overlay.style.display = 'none';
 
   if (typeof Html5Qrcode === 'undefined') {
     exibirPainelInferior("❌ ERRO DE CARREGAMENTO", "BIBLIOTECA INDISPONÍVEL", "Recarregue a página.", "alerta");
@@ -21,7 +22,7 @@ async function iniciarAplicacao() {
   await carregarDadosSilenciosamente();
   iniciarCamera();
 
-  // Sincroniza com a planilha a cada 10 segundos
+  // Sincroniza a cada 10 segundos com a planilha
   setInterval(carregarDadosSilenciosamente, 10000);
 }
 
@@ -82,16 +83,16 @@ function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   }
 }
 
-// MOTOR DE BUSCA HÍBRIDO (Tolerante a falhas físicas)
+// 🔍 MOTOR DE LEITURA E PROCESSAMENTO
 async function onScanSuccess(decodedText) {
   if (aguardandoProcessamento) return;
 
   const codigoLido = limparCodigoHU(decodedText);
 
-  // Descarta leituras acidentais muito curtas
+  // Ignora ruídos menores que 4 dígitos
   if (codigoLido.length < 4) return;
 
-  // Busca Inteligente na Lista (ignora prefixos 00 automaticamente)
+  // Busca Inteligente: Cruza HU curta e Código GS1-128 longo com (00)
   const itemExistente = listaHUs.find(i => {
     const huPlanilha = limparCodigoHU(String(i.hu));
     if (huPlanilha === codigoLido) return true;
@@ -104,7 +105,7 @@ async function onScanSuccess(decodedText) {
 
   // CÓDIGO NÃO LOCALIZADO NA LISTA
   if (!itemExistente) {
-    exibirPainelInferior("⚠️ NÃO ENCONTRADO", codigoLido, "Código/HU fora da lista de conferência", "alerta");
+    exibirPainelInferior("⚠️ NÃO ENCONTRADO", codigoLido, "Código fora da lista de conferência", "alerta");
     return;
   }
 
@@ -132,52 +133,47 @@ async function onScanSuccess(decodedText) {
   }
 }
 
-// Inicia a câmera focada na estabilidade e nitidez (High Density Barcodes)
+// 📷 INICIALIZAÇÃO INFALÍVEL DA CÂMERA
 async function iniciarCamera() {
   try {
     if (html5QrCode) {
       try { await html5QrCode.stop(); } catch(e){}
     }
 
-    // Aceita múltiplos formatos logísticos 1D
-    html5QrCode = new Html5Qrcode("reader", {
-      formatsToSupport: [ 
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.ITF
-      ]
-    });
+    html5QrCode = new Html5Qrcode("reader");
 
     const config = { 
-      fps: 20, // Velocidade moderada para garantir foco nítido
-      disableFlip: false,
-      // Mira larga, mas deixa 10% de margem branca nas laterais
-      qrbox: function(viewfinderWidth, viewfinderHeight) {
-        const width = Math.floor(viewfinderWidth * 0.88);
-        const height = Math.floor(viewfinderHeight * 0.40);
-        return { width: width, height: height };
-      },
-      experimentalFeatures: {
-        useBarCodeDetectorIfSupported: true // Processamento nativo por hardware
-      }
+      fps: 15,
+      qrbox: { width: 280, height: 120 }
     };
 
-    // Pedido de câmera simplificado para compatibilidade universal
-    const videoConstraints = {
-      facingMode: "environment",
-      focusMode: "continuous" // Força o foco contínuo para evitar borrão
-    };
-
-    await html5QrCode.start(videoConstraints, config, onScanSuccess, () => {});
+    // Tenta abrir a câmera traseira de forma padrão
+    await html5QrCode.start(
+      { facingMode: "environment" }, 
+      config, 
+      onScanSuccess, 
+      () => {}
+    );
 
   } catch (err) {
-    console.warn("Falha na inicialização avançada, usando modo simples...", err);
+    console.warn("Falha no método padrão de câmera, tentando via ID de dispositivo...", err);
     try {
-      // Modo de compatibilidade total para celulares antigos
-      const configFallback = { fps: 15, qrbox: { width: 260, height: 120 } };
-      await html5QrCode.start({ facingMode: "environment" }, configFallback, onScanSuccess, () => {});
+      // Método Fallback: Lista todas as câmeras do celular e pega a principal
+      const devices = await Html5Qrcode.getCameras();
+      if (devices && devices.length > 0) {
+        const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('traseira')) || devices[devices.length - 1];
+        await html5QrCode.start(
+          backCamera.id, 
+          { fps: 15, qrbox: { width: 260, height: 110 } }, 
+          onScanSuccess, 
+          () => {}
+        );
+      } else {
+        throw new Error("Nenhuma câmera encontrada no dispositivo.");
+      }
     } catch (errFallback) {
-      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Permita o uso da câmera no navegador.", "alerta");
+      console.error("Erro fatal de câmera:", errFallback);
+      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Acesse via HTTPS ou permita a câmera no navegador.", "alerta");
     }
   }
 }
