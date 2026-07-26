@@ -2,56 +2,49 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Conferência de HUs (Scanner Compacto)</title>
-  
-  <!-- Biblioteca para leitura de Código de Barras via Câmera -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Scanner Tela Inteira (HUD)</title>
+
+  <!-- Biblioteca para leitura de Código de Barras -->
   <script src="https://unpkg.com/html5-qrcode"></script>
 
-  <!-- Estilos CSS -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div class="container">
-    <div class="header-panel">
-      <div class="sync-status">
+  <!-- CÂMERA EM TELA INTEIRA -->
+  <div id="scanner-container" class="scanner-fullscreen">
+    <div id="reader"></div>
+
+    <!-- Laser e Miras de Varredura -->
+    <div class="laser-line"></div>
+    <div class="mira top-left"></div>
+    <div class="mira top-right"></div>
+    <div class="mira bottom-left"></div>
+    <div class="mira bottom-right"></div>
+
+    <!-- HUD SOBREPOSTO: PAINEL SUPERIOR (Status e Faltantes) -->
+    <div class="hud-top">
+      <div class="sync-badge">
         <span id="sync-dot" class="dot"></span>
         <span id="sync-texto">Conectando...</span>
       </div>
-      <h2>LX02</h2>
-      <div id="progresso-texto" style="font-size: 0.85rem; color: #5f6368;">Carregando...</div>
-      <div class="progress-bar-container">
-        <div id="progress-bar" class="progress-bar"></div>
+
+      <div class="counter-box">
+        <span class="counter-label">FALTAM CONFERIR</span>
+        <span id="qtd-restante" class="counter-number">--</span>
+        <span id="qtd-total" class="counter-sub">de -- itens</span>
       </div>
     </div>
 
-    <!-- CÂMERA EM FORMATO TARJA COM LASER E MIRAS -->
-    <div id="scanner-container" class="scanner-wrapper">
-      <div id="reader"></div>
-      <div class="laser-line"></div>
-      <div class="mira top-left"></div>
-      <div class="mira top-right"></div>
-      <div class="mira bottom-left"></div>
-      <div class="mira bottom-right"></div>
-      <div id="scanner-text" class="scanner-status">🔍 BUSCANDO CÓDIGO DE BARRAS...</div>
-    </div>
-
-    <!-- Mensagens de Alerta (Sucesso/Erro) -->
-    <div id="feedback"></div>
-
-    <!-- Container da Lista de HUs -->
-    <div class="list-title">Itens para Encontrar:</div>
-    <div id="lista-container" class="lista-hus"></div>
-
-    <!-- PAINEL DE LOGS -->
-    <div class="list-title" style="color: #1a73e8; margin-top: 30px;">🐞 Diagnóstico em Tempo Real:</div>
-    <div id="painel-logs">
-      <div class="log-entry"><span class="log-info">[Sistema] Scanner visual ativado...</span></div>
+    <!-- HUD SOBREPOSTO: PAINEL INFERIOR (Última HU Bipada) -->
+    <div id="card-ultimo-bip" class="hud-bottom sem-leitura">
+      <div class="bip-status-title" id="bip-status-title">Aguardando leitura...</div>
+      <div class="bip-hu-code" id="bip-hu-code">APONTE A CÂMERA</div>
+      <div class="bip-detalhes" id="bip-detalhes">Posição / Bin aparecerão aqui</div>
     </div>
   </div>
 
-  <!-- Lógica e Comportamento JS -->
   <script src="script.js"></script>
 </body>
 </html>
