@@ -152,31 +152,69 @@ video {
   text-shadow: 0 1px 3px rgba(0,0,0,0.9);
 }
 
-/* Coloca a caixa "Aguardando 1789..." ACIMA da área verde de enquadramento */
+/* Coloca a caixa de leitura ACIMA da área verde de enquadramento */
 .visor-numeros {
   position: absolute;
-  top: -45px; /* Move para cima da borda da mira */
+  top: -45px;
   left: 50%;
   transform: translateX(-50%);
   width: 95%;
   font-family: 'Courier New', monospace;
   font-size: 15px;
   font-weight: 900;
-  color: rgba(0, 230, 118, 0.9);
   text-align: center;
   letter-spacing: 1.5px;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-  background: rgba(0, 0, 0, 0.75);
   padding: 4px 8px;
   border-radius: 6px;
   word-break: break-all;
-  border: 1px solid rgba(0, 230, 118, 0.4);
   pointer-events: none;
+}
+
+/* =================================================================
+   🌌 VIBE FUTURISTA / HOMEM DE FERRO (HUD)
+   ================================================================= */
+
+.visor-vibe-futurista {
+  background: rgba(0, 5, 12, 0.88) !important;
+  border: 1px solid rgba(0, 210, 255, 0.4) !important;
+  box-shadow: 0 0 15px rgba(0, 210, 255, 0.2) inset, 0 4px 10px rgba(0,0,0,0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* Parte estabilizada: Verde Neon com brilho forte */
+.nums-estaveis {
+  color: #00e676;
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(0, 230, 118, 0.9), 0 0 15px rgba(0, 230, 118, 0.5);
+}
+
+/* Parte ativa (processando): Dourado/Amarelo com animação de pulsação */
+.nums-piscando {
+  color: #ffd700;
+  font-weight: 900;
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.8);
+  animation: pulsarIdentificacao 0.12s ease-in-out infinite alternate;
+}
+
+/* Animação que simula o HUD oscilando em tempo real */
+@keyframes pulsarIdentificacao {
+  0% {
+    opacity: 0.5;
+    filter: blur(0.6px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+    text-shadow: 0 0 10px rgba(255, 215, 0, 1), 0 0 18px rgba(255, 215, 0, 0.7);
+  }
 }
 
 .visor-status {
   position: absolute;
-  bottom: -32px; /* Move o status para a parte inferior da mira */
+  bottom: -32px;
   left: 50%;
   transform: translateX(-50%);
   width: 90%;
@@ -320,7 +358,7 @@ video {
   to { transform: translate(-50%, 0); opacity: 1; }
 }
 
-/* Oculta o canvas completamente sem afetar o layout */
+/* Oculta o canvas completamente */
 #canvas-processamento { 
   display: none !important;
   position: absolute;
