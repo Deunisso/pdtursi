@@ -3,34 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WMS - Leitor de HU (OCR)</title>
+  <title>WMS - Leitor de HU (OCR Inteligente)</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #1e1e2d; color: #fff; margin: 0; padding: 15px; }
-    h1 { font-size: 20px; margin-bottom: 10px; color: #00d2ff; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #12121c; color: #fff; margin: 0; padding: 10px; }
+    h1 { font-size: 18px; margin: 5px 0 15px 0; color: #00d2ff; letter-spacing: 1px; }
     
     /* Painel de Contagem */
-    #dashboard { display: flex; justify-content: space-around; max-width: 500px; margin: 0 auto 15px auto; gap: 10px; }
-    .card { background: #2b2b40; padding: 15px; border-radius: 10px; flex: 1; box-shadow: 0 4px 8px rgba(0,0,0,0.3); border-bottom: 4px solid #333; }
+    #dashboard { display: flex; justify-content: space-around; max-width: 480px; margin: 0 auto 10px auto; gap: 10px; }
+    .card { background: #1e1e2d; padding: 10px; border-radius: 8px; flex: 1; box-shadow: 0 4px 8px rgba(0,0,0,0.4); border-bottom: 3px solid #333; }
     .card.found { border-color: #00e676; }
     .card.missing { border-color: #ff5252; }
-    .card p { margin: 0; font-size: 14px; color: #aaa; text-transform: uppercase; font-weight: bold; }
-    .card h2 { margin: 5px 0 0 0; font-size: 32px; }
+    .card p { margin: 0; font-size: 12px; color: #aaa; text-transform: uppercase; font-weight: bold; }
+    .card h2 { margin: 5px 0 0 0; font-size: 28px; }
     .found h2 { color: #00e676; }
     .missing h2 { color: #ff5252; }
 
-    /* Câmera */
-    #video-container { position: relative; max-width: 450px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 3px solid #444; background: #000; }
+    /* Câmera e Mira */
+    #video-container { position: relative; max-width: 480px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 2px solid #333; background: #000; }
     video { width: 100%; display: block; }
-    .mira { position: absolute; top: 35%; left: 10%; width: 80%; height: 30%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.6); pointer-events: none; }
-    #status-ocr { margin-top: 10px; font-size: 14px; color: #ffd700; min-height: 20px; font-weight: 500; }
+    .mira { position: absolute; top: 30%; left: 5%; width: 90%; height: 40%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); transition: all 0.2s; pointer-events: none; }
+    .mira.lendo { border-color: #ffd700; background: rgba(255, 215, 0, 0.05); }
+    .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.2); }
 
-    /* PING DE ALERTA (Quando acha uma HU) */
-    #ping-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 230, 118, 0.95); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; color: #000; animation: flash 0.3s; }
-    #ping-overlay h1 { font-size: 40px; color: #000; margin: 0; font-weight: 900; }
-    #ping-overlay p { font-size: 24px; margin: 10px 0; font-weight: bold; }
-    #ping-hu { background: #000; color: #00e676; padding: 10px 20px; border-radius: 8px; font-size: 28px; font-family: monospace; letter-spacing: 2px; margin-top: 15px; }
+    /* VISOR AO VIVO (HUD DE LEITURA) */
+    #visor-hud { max-width: 480px; margin: 10px auto 0 auto; background: #1a1a26; border: 1px solid #333; border-radius: 8px; padding: 10px; text-align: left; }
+    #visor-hud .titulo-hud { font-size: 11px; color: #888; text-transform: uppercase; display: flex; justify-content: space-between; margin-bottom: 4px; }
+    #visor-hud .numeros-lidos { font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: bold; color: #00e676; letter-spacing: 2px; min-height: 24px; word-break: break-all; }
+    #visor-hud .dica-status { font-size: 12px; color: #ffd700; margin-top: 4px; font-style: italic; }
+
+    /* Canvas invisível para processamento de imagem */
+    #canvas-processamento { display: none; }
+
+    /* PING DE ALERTA */
+    #ping-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 230, 118, 0.96); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; color: #000; animation: flash 0.3s; }
+    #ping-overlay h1 { font-size: 36px; color: #000; margin: 0; font-weight: 900; }
+    #ping-overlay p { font-size: 20px; margin: 10px 0; font-weight: bold; }
+    #ping-hu { background: #000; color: #00e676; padding: 10px 15px; border-radius: 8px; font-size: 24px; font-family: monospace; letter-spacing: 2px; margin-top: 15px; }
     @keyframes flash { from { opacity: 0; transform: scale(1.1); } to { opacity: 1; transform: scale(1); } }
   </style>
 </head>
@@ -38,7 +48,7 @@
 
   <h1>🔍 LEITOR DE ESTOQUE HU (OCR)</h1>
 
-  <!-- Painel HUs -->
+  <!-- Painel -->
   <div id="dashboard">
     <div class="card found">
       <p>Encontradas</p>
@@ -53,10 +63,20 @@
   <!-- Câmera e Mira -->
   <div id="video-container">
     <video id="webcam" autoplay playsinline></video>
-    <div class="mira"></div>
+    <div id="mira-box" class="mira"></div>
   </div>
   
-  <p id="status-ocr">⏳ Inicializando Inteligência OCR...</p>
+  <!-- VISOR DE LEITURA EM TEMPO REAL -->
+  <div id="visor-hud">
+    <div class="titulo-hud">
+      <span>Leitura em Tempo Real:</span>
+      <span id="contador-digitos">0 / 18 dígitos</span>
+    </div>
+    <div id="numeros-lidos" class="numeros-lidos">Aguardando números...</div>
+    <div id="dica-status" class="dica-status">⏳ Inicializando Inteligência OCR...</div>
+  </div>
+
+  <canvas id="canvas-processamento"></canvas>
 
   <!-- PING DE ALERTA -->
   <div id="ping-overlay">
@@ -68,22 +88,28 @@
   <script>
     // =================================================================
     // ⚠️ COLOQUE AQUI A URL QUE VOCÊ COPIOU DO GOOGLE APPS SCRIPT:
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
+    const SCRIPT_URL = "SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
     // =================================================================
 
     const video = document.getElementById('webcam');
-    const statusOcr = document.getElementById('status-ocr');
+    const miraBox = document.getElementById('mira-box');
+    const numerosLidosEl = document.getElementById('numeros-lidos');
+    const contadorDigitosEl = document.getElementById('contador-digitos');
+    const dicaStatusEl = document.getElementById('dica-status');
+    const canvas = document.getElementById('canvas-processamento');
+    
     let ocrAtivo = false;
     let processandoHU = false;
+    let workerOCR = null;
 
-    // 1. Efeito Sonoro (Bip sem precisar de arquivos externos)
+    // 1. Efeito Sonoro (Bip)
     function tocarBip() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime); // Nota A5
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.2);
         gain.gain.setValueAtTime(0.5, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
@@ -94,73 +120,138 @@
       } catch(e) {}
     }
 
-    // 2. Atualizar Contadores em Tempo Real da Planilha
+    // 2. Atualizar Contadores da Planilha
     async function atualizarDashboard() {
       try {
         const res = await fetch(SCRIPT_URL);
         const data = await res.json();
         document.getElementById('qtd-encontradas').innerText = data.encontradas;
         document.getElementById('qtd-faltam').innerText = data.pendentes;
-      } catch (e) {
-        console.log("Aguardando conexão com planilha...");
-      }
+      } catch (e) {}
     }
 
     // 3. Inicializar Câmera Traseira
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } })
-      .then(stream => {
-        video.srcObject = stream;
-        iniciarOCR();
-      })
-      .catch(err => {
-        statusOcr.innerText = "❌ Erro na câmera. Permita o acesso no navegador.";
-        statusOcr.style.color = "#ff5252";
-      });
+    navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        facingMode: "environment", 
+        width: { ideal: 1280 }, 
+        height: { ideal: 720 },
+        focusMode: "continuous"
+      } 
+    })
+    .then(stream => {
+      video.srcObject = stream;
+      iniciarMotorOCR();
+    })
+    .catch(err => {
+      dicaStatusEl.innerText = "❌ Erro na câmera. Permita o acesso no navegador.";
+      dicaStatusEl.style.color = "#ff5252";
+    });
 
-    // 4. Motor OCR (Tesseract) configurado para SÓ LER NÚMEROS
-    async function iniciarOCR() {
-      statusOcr.innerText = "⚡ Carregando motor OCR de números...";
+    // 4. Inicializar Motor OCR (Tesseract)
+    async function iniciarMotorOCR() {
+      dicaStatusEl.innerText = "⚡ Carregando inteligência artificial...";
+      workerOCR = await Tesseract.createWorker('eng');
       
-      const worker = await Tesseract.createWorker('eng');
-      // TRUQUE: Restringir o OCR apenas para algarismos numéricos (evita ler letras erradas)
-      await worker.setParameters({
+      // Restringe exclusivamente para números (0-9)
+      await workerOCR.setParameters({
         tessedit_char_whitelist: '0123456789',
       });
 
-      statusOcr.innerText = "🟢 Câmera Pronta! Aponte para os 18 dígitos da etiqueta.";
+      dicaStatusEl.innerText = "🟢 Câmera Pronta! Centralize os 18 números na mira azul.";
+      dicaStatusEl.style.color = "#00e676";
       ocrAtivo = true;
 
-      // Executa a leitura a cada 1.5 segundos
-      setInterval(async () => {
-        if (!ocrAtivo || processandoHU) return;
-
-        // Recorta apenas a área central da mira para o OCR ser 5x mais rápido
-        const canvas = document.createElement('canvas');
-        const vw = video.videoWidth;
-        const vh = video.videoHeight;
-        
-        canvas.width = vw * 0.8;
-        canvas.height = vh * 0.3;
-        const ctx = canvas.getContext('2d');
-        
-        // Desenha só o miolo (onde a mira azul está posicionada)
-        ctx.drawImage(video, vw * 0.1, vh * 0.35, vw * 0.8, vh * 0.3, 0, 0, canvas.width, canvas.height);
-
-        const { data: { text } } = await worker.recognize(canvas);
-        
-        // Limpa espaços e quebras de linha e busca exatamente 18 números seguidos
-        const textoLimpo = text.replace(/\D/g, '');
-        const match = textoLimpo.match(/\d{18}/);
-
-        if (match) {
-          const huEncontrada = match[0];
-          statusOcr.innerText = `⏳ Lendo HU: ${huEncontrada}...`;
-          verificarHU(huEncontrada);
-        }
-      }, 1500);
+      // Inicia o Loop Assíncrono (Nunca trava a memória)
+      loopLeituraOCR();
     }
 
-    // 5. Enviar HU para a Planilha e disparar o PING
+    // 5. Loop Inteligente de Leitura
+    async function loopLeituraOCR() {
+      if (!ocrAtivo || processandoHU) {
+        setTimeout(loopLeituraOCR, 500);
+        return;
+      }
+
+      try {
+        miraBox.classList.add('lendo');
+        
+        // Recorta a área exata da mira (Top 30% a 70%, Left 5% a 95%)
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (vw > 0 && vh > 0) {
+          canvas.width = vw * 0.9;
+          canvas.height = vh * 0.4;
+          const ctx = canvas.getContext('2d');
+          
+          // Captura o quadro
+          ctx.drawImage(video, vw * 0.05, vh * 0.30, vw * 0.9, vh * 0.4, 0, 0, canvas.width, canvas.height);
+
+          // TRATAMENTO DE IMAGEM: Aumentar Contraste / Escala de Cinza
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imgData.data;
+          for (let i = 0; i < data.length; i += 4) {
+            // Converte para cinza e aplica contraste severo
+            let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            avg = avg < 130 ? 0 : 255; // Binarização (Preto e Branco puro)
+            data[i] = avg;     // R
+            data[i + 1] = avg; // G
+            data[i + 2] = avg; // B
+          }
+          ctx.putImageData(imgData, 0, 0);
+
+          // Executa OCR no corte otimizado
+          const { data: { text } } = await workerOCR.recognize(canvas);
+          
+          // Extrai apenas sequências de números
+          const textoLimpo = text.replace(/\D/g, '');
+          
+          // Busca a maior sequência de números encontrada no quadro
+          if (textoLimpo.length > 0) {
+            numerosLidosEl.innerText = textoLimpo;
+            contadorDigitosEl.innerText = `${textoLimpo.length} / 18 dígitos`;
+            
+            if (textoLimpo.length === 18) {
+              numerosLidosEl.style.color = "#00e676";
+              dicaStatusEl.innerText = "🎯 18 Dígitos detectados! Validando no estoque...";
+              dicaStatusEl.style.color = "#00e676";
+              miraBox.classList.remove('lendo');
+              miraBox.classList.add('sucesso');
+              
+              await verificarHU(textoLimpo);
+            } else if (textoLimpo.length > 18) {
+              // Se capturou números a mais, tenta achar os 18 dentro da string
+              const match = textoLimpo.match(/\d{18}/);
+              if (match) {
+                numerosLidosEl.innerText = match[0];
+                contadorDigitosEl.innerText = "18 / 18 dígitos";
+                await verificarHU(match[0]);
+              } else {
+                numerosLidosEl.style.color = "#ff9800";
+                dicaStatusEl.innerText = "⚠️ Excesso de números. Aproxime a câmera da etiqueta.";
+                dicaStatusEl.style.color = "#ff9800";
+              }
+            } else {
+              numerosLidosEl.style.color = "#ffd700";
+              dicaStatusEl.innerText = `👁️ Lendo... Faltam ${18 - textoLimpo.length} dígitos para completar.`;
+              dicaStatusEl.style.color = "#ffd700";
+            }
+          } else {
+            numerosLidosEl.innerText = "---";
+            contadorDigitosEl.innerText = "0 / 18 dígitos";
+            numerosLidosEl.style.color = "#666";
+          }
+        }
+        miraBox.classList.remove('lendo');
+      } catch (e) {
+        console.error("Erro no loop OCR:", e);
+      }
+
+      // Chama a próxima leitura instantaneamente após terminar essa (sem travar memória)
+      setTimeout(loopLeituraOCR, 200);
+    }
+
+    // 6. Validar no Google Sheets e Exibir Alerta
     async function verificarHU(hu) {
       processandoHU = true;
       try {
@@ -172,47 +263,48 @@
 
         if (data.status === "sucesso") {
           tocarBip();
-          
-          // ATIVA O PING NA TELA PARA A EQUIPE!
           const ping = document.getElementById('ping-overlay');
           document.getElementById('ping-hu').innerText = hu;
           ping.style.display = 'flex';
           
           atualizarDashboard();
 
-          // Esconde o Ping depois de 3.5 segundos e volta a ler
           setTimeout(() => {
             ping.style.display = 'none';
-            statusOcr.innerText = "🟢 Câmera Pronta! Aponte para a próxima etiqueta.";
+            resetarVisor();
             processandoHU = false;
           }, 3500);
 
         } else if (data.status === "ja_lido") {
-          statusOcr.innerText = `⚠️ A HU ${hu} JÁ FOI REGISTRADA ANTES!`;
-          statusOcr.style.color = "#ff9800";
-          setTimeout(() => { 
-            statusOcr.innerText = "🟢 Câmera Pronta!"; 
-            statusOcr.style.color = "#ffd700";
-            processandoHU = false; 
-          }, 2500);
+          dicaStatusEl.innerText = `⚠️ A HU ${hu} JÁ FOI REGISTRADA ANTES!`;
+          dicaStatusEl.style.color = "#ff9800";
+          numerosLidosEl.style.color = "#ff9800";
+          setTimeout(() => { resetarVisor(); processandoHU = false; }, 2500);
         } else {
-          statusOcr.innerText = `❌ HU ${hu} não pertence à lista desta planilha.`;
-          statusOcr.style.color = "#ff5252";
-          setTimeout(() => { 
-            statusOcr.innerText = "🟢 Câmera Pronta!"; 
-            statusOcr.style.color = "#ffd700";
-            processandoHU = false; 
-          }, 2500);
+          dicaStatusEl.innerText = `❌ HU ${hu} não encontrada na lista da planilha!`;
+          dicaStatusEl.style.color = "#ff5252";
+          numerosLidosEl.style.color = "#ff5252";
+          setTimeout(() => { resetarVisor(); processandoHU = false; }, 2500);
         }
       } catch (e) {
-        statusOcr.innerText = "Erro de conexão com o Google Sheets.";
-        processandoHU = false;
+        dicaStatusEl.innerText = "❌ Erro de conexão com a planilha do Google.";
+        dicaStatusEl.style.color = "#ff5252";
+        setTimeout(() => { resetarVisor(); processandoHU = false; }, 2500);
       }
     }
 
-    // Atualiza os contadores ao abrir e a cada 4 segundos (para sincronizar entre celulares)
+    function resetarVisor() {
+      miraBox.classList.remove('sucesso');
+      numerosLidosEl.innerText = "Aguardando números...";
+      numerosLidosEl.style.color = "#00e676";
+      contadorDigitosEl.innerText = "0 / 18 dígitos";
+      dicaStatusEl.innerText = "🟢 Câmera Pronta! Centralize os 18 números na mira azul.";
+      dicaStatusEl.style.color = "#00e676";
+    }
+
+    // Sincroniza o painel com a planilha a cada 5 segundos
     atualizarDashboard();
-    setInterval(atualizarDashboard, 4000);
+    setInterval(atualizarDashboard, 5000);
   </script>
 </body>
 </html>
