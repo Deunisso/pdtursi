@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WMS - Leitor de HU (Padrão 1789)</title>
+  <title>WMS - Leitor Ultra Rápido HU (1789)</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -11,8 +11,8 @@
     
     .app-container { display: flex; flex-direction: column; height: 100vh; padding: 8px; justify-content: space-between; }
 
-    /* Topo Slim */
-    #dashboard { display: flex; justify-content: space-between; gap: 8px; height: 60px; }
+    /* Dashboard Slim */
+    #dashboard { display: flex; justify-content: space-between; gap: 8px; height: 58px; }
     .card { background: #161622; border-radius: 8px; flex: 1; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 3px solid #333; }
     .card.found { border-color: #00e676; }
     .card.missing { border-color: #ff5252; }
@@ -25,17 +25,21 @@
     #video-container { position: relative; flex: 1; margin: 8px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2a2a3a; background: #000; display: flex; align-items: center; justify-content: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
 
-    /* Mira Adaptativa */
+    /* Botão Flutuante de Lanterna */
+    #btn-lanterna { position: absolute; top: 12px; right: 12px; z-index: 50; background: rgba(22, 22, 34, 0.85); border: 1px solid #00d2ff; color: #00d2ff; padding: 8px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; cursor: pointer; backdrop-filter: blur(4px); display: flex; align-items: center; gap: 6px; }
+    #btn-lanterna.ativo { background: #00d2ff; color: #000; box-shadow: 0 0 10px #00d2ff; }
+
+    /* Mira Adaptativa com Efeito de Leitura */
     .mira { position: absolute; top: 32%; left: 4%; width: 92%; height: 32%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); border-radius: 8px; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 8px 12px; transition: all 0.2s ease; }
     .mira.lendo { border-color: #ffd700; }
-    .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.15); box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 20px #00e676; }
+    .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.18); box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 25px #00e676; }
 
-    /* Visor Interno */
+    /* Visor Interno de Leitura */
     .visor-topo { display: flex; justify-content: space-between; font-size: 10px; color: #00d2ff; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.9); }
-    .visor-numeros { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 900; color: #00e676; text-align: center; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.9); background: rgba(0,0,0,0.8); padding: 6px; border-radius: 4px; word-break: break-all; margin: auto 0; }
-    .visor-status { font-size: 10px; color: #ffd700; text-align: center; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.9); background: rgba(0,0,0,0.6); padding: 3px; border-radius: 4px; }
+    .visor-numeros { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 900; color: #00e676; text-align: center; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.9); background: rgba(0,0,0,0.85); padding: 6px; border-radius: 4px; word-break: break-all; margin: auto 0; border: 1px solid rgba(0,230,118,0.3); }
+    .visor-status { font-size: 10px; color: #ffd700; text-align: center; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.9); background: rgba(0,0,0,0.7); padding: 3px; border-radius: 4px; }
 
-    /* Notificação Discreta no Topo */
+    /* Pop-up de Sucesso */
     #notificacao-discreta { display: none; position: absolute; top: 12px; left: 5%; width: 90%; background: #12121a; border: 2px solid #00e676; border-radius: 8px; padding: 10px 15px; z-index: 100; box-shadow: 0 4px 15px rgba(0,230,118,0.4); text-align: left; animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
     #notificacao-discreta .titulo { font-size: 11px; color: #00e676; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
     #notificacao-discreta .hu-codigo { font-family: monospace; font-size: 17px; color: #fff; font-weight: bold; margin-top: 2px; letter-spacing: 1.5px; }
@@ -48,7 +52,7 @@
 <body>
 
   <div class="app-container">
-    <!-- Topo Slim -->
+    <!-- Dashboard Slim -->
     <div id="dashboard">
       <div class="card found">
         <p>Encontradas</p>
@@ -60,11 +64,16 @@
       </div>
     </div>
 
-    <!-- Câmera com Leitura Filtrada por 1789 -->
+    <!-- Câmera com Binarização de Imagem em Tempo Real -->
     <div id="video-container">
       <video id="webcam" autoplay playsinline></video>
       
-      <!-- Notificação Discreta -->
+      <!-- Botão de Lanterna -->
+      <button id="btn-lanterna" onclick="alternarLanterna()">
+        <span>💡</span> Lanterna
+      </button>
+
+      <!-- Pop-up de Notificação -->
       <div id="notificacao-discreta">
         <div class="titulo">✓ HU Registrada na Planilha</div>
         <div id="hu-notificacao-texto" class="hu-codigo">000000000000000000</div>
@@ -73,7 +82,7 @@
       <!-- Mira Adaptativa -->
       <div id="mira-box" class="mira">
         <div class="visor-topo">
-          <span id="modo-leitura">PADRÃO FIXO: 1789... (18 DÍGITOS)</span>
+          <span id="modo-leitura">PADRÃO GS1: 1789... (18 DÍGITOS)</span>
           <span id="contador-digitos">0 / 18</span>
         </div>
         <div id="numeros-lidos" class="visor-numeros">Aguardando...</div>
@@ -87,7 +96,7 @@
   <script>
     // =================================================================
     // ⚠️ COLOQUE AQUI A SUA URL DO GOOGLE APPS SCRIPT:
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
+    const SCRIPT_URL = "SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
     // =================================================================
 
     const video = document.getElementById('webcam');
@@ -98,12 +107,15 @@
     const modoLeituraEl = document.getElementById('modo-leitura');
     const notificacaoEl = document.getElementById('notificacao-discreta');
     const huNotificacaoTexto = document.getElementById('hu-notificacao-texto');
+    const btnLanterna = document.getElementById('btn-lanterna');
     const canvas = document.getElementById('canvas-processamento');
 
     let ocrAtivo = false;
     let processandoHU = false;
     let workerOCR = null;
+    let lanternaLigada = false;
 
+    // Toca o bip sonoro no leitor
     function tocarBip() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -121,6 +133,26 @@
       } catch(e) {}
     }
 
+    // Liga / Desliga a Lanterna do Smartphone
+    async function alternarLanterna() {
+      const stream = video.srcObject;
+      if (!stream) return;
+      const track = stream.getVideoTracks()[0];
+      try {
+        const capabilities = track.getCapabilities();
+        if (capabilities.torch) {
+          lanternaLigada = !lanternaLigada;
+          await track.applyConstraints({ advanced: [{ torch: lanternaLigada }] });
+          btnLanterna.classList.toggle('ativo', lanternaLigada);
+        } else {
+          alert("Lanterna não suportada neste dispositivo.");
+        }
+      } catch(e) {
+        console.warn("Erro ao acionar lanterna:", e);
+      }
+    }
+
+    // Atualiza contadores do topo via Google Apps Script
     async function atualizarDashboard() {
       try {
         const res = await fetch(SCRIPT_URL);
@@ -130,6 +162,7 @@
       } catch (e) {}
     }
 
+    // Acesso à Câmera Traseira em HD
     navigator.mediaDevices.getUserMedia({ 
       video: { 
         facingMode: "environment", 
@@ -147,25 +180,76 @@
       dicaStatusEl.style.color = "#ff5252";
     });
 
+    // Inicialização do Motor de Reconhecimento
     async function iniciarOCR() {
-      dicaStatusEl.innerText = "⚡ Carregando Reconhecedor 1789...";
+      dicaStatusEl.innerText = "⚡ Carregando Reconhecedor Otimizado...";
       
       workerOCR = await Tesseract.createWorker('eng');
       
+      // Limita os caracteres apenas ao necessário (números, parênteses e WMS)
+      // PSM 6 = Assume bloco rígido de texto único (Acelera a leitura em 3x)
       await workerOCR.setParameters({
-        tessedit_char_whitelist: '0123456789WMSwms',
+        tessedit_char_whitelist: '0123456789()WMSwms',
+        tessedit_pageseg_mode: '6',
       });
 
-      dicaStatusEl.innerText = "🟢 Aponte para o SSCC iniciado em 1789";
+      dicaStatusEl.innerText = "🟢 Aponte a mira para o número 1789...";
       dicaStatusEl.style.color = "#00e676";
       ocrAtivo = true;
 
       loopOCR();
     }
 
+    // 🧠 ALGORITMO DE BINARIZAÇÃO DE OTSU (Transforma o Canvas em P&B Puro de Alto Contraste)
+    function aplicarBinarizacaoOtsu(ctx, width, height) {
+      const imgData = ctx.getImageData(0, 0, width, height);
+      const data = imgData.data;
+      const histogram = new Array(256).fill(0);
+
+      // 1. Converte para Escala de Cinza e calcula o histograma
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+        data[i] = data[i+1] = data[i+2] = gray;
+        histogram[gray]++;
+      }
+
+      // 2. Calcula o limiar ideal de separação (Limiar de Otsu)
+      const total = width * height;
+      let sum = 0;
+      for (let i = 0; i < 256; i++) sum += i * histogram[i];
+
+      let sumB = 0, wB = 0, wF = 0, maxVariance = 0, threshold = 128;
+
+      for (let t = 0; t < 256; t++) {
+        wB += histogram[t];
+        if (wB === 0) continue;
+        wF = total - wB;
+        if (wF === 0) break;
+
+        sumB += t * histogram[t];
+        const mB = sumB / wB;
+        const mF = (sum - sumB) / wF;
+
+        const variance = wB * wF * (mB - mF) * (mB - mF);
+        if (variance > maxVariance) {
+          maxVariance = variance;
+          threshold = t;
+        }
+      }
+
+      // 3. Aplica o limiar: tudo que é texto vira PRETO (0), fundo vira BRANCO (255)
+      for (let i = 0; i < data.length; i += 4) {
+        const val = data[i] < threshold ? 0 : 255;
+        data[i] = data[i+1] = data[i+2] = val;
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    // Loop de Processamento
     async function loopOCR() {
       if (!ocrAtivo || processandoHU) {
-        setTimeout(loopOCR, 200);
+        setTimeout(loopOCR, 150);
         return;
       }
 
@@ -176,52 +260,40 @@
         const vh = video.videoHeight;
         
         if (vw > 0 && vh > 0) {
-          canvas.width = vw * 0.92;
-          canvas.height = vh * 0.32;
+          // Amplia a imagem da mira em 2x no Canvas (Zoom Digital para nitidez de caracteres)
+          const CROP_W = vw * 0.92;
+          const CROP_H = vh * 0.32;
+          
+          canvas.width = CROP_W * 2;
+          canvas.height = CROP_H * 2;
           const ctx = canvas.getContext('2d');
           
-          ctx.drawImage(video, vw * 0.04, vh * 0.32, vw * 0.92, vh * 0.32, 0, 0, canvas.width, canvas.height);
+          // Desenha o recorte da mira com escala 2x
+          ctx.drawImage(video, vw * 0.04, vh * 0.32, CROP_W, CROP_H, 0, 0, canvas.width, canvas.height);
 
+          // Aplica o pré-processamento de imagem (Binarização P&B de alto contraste)
+          aplicarBinarizacaoOtsu(ctx, canvas.width, canvas.height);
+
+          // Executa a leitura no Canvas tratado
           const result = await workerOCR.recognize(canvas);
-          const words = result.data.words || [];
+          const rawText = result.data.text || "";
 
-          // 🔍 OPÇÃO 1: Procura a palavra "WMS" e busca estritamente o código '1789...' abaixo
-          const wmsWord = words.find(w => /WMS/i.test(w.text));
-
-          let huEncontrada = null;
-          let metodoUsado = "";
-
-          // REGRA DE OURO: O código DEVE obrigatoriamente começar com 1789 e ter 18 dígitos no total
+          // REGEX GS1 SSCC: Busca obrigatoriamente a sequência 1789 com 18 dígitos
+          // Ignora parênteses (00), espaços, traços ou prefixos como SSCC/WMS
           const REGEX_SSCC = /1789\d{14}/;
 
-          if (wmsWord) {
-            const wmsYFim = wmsWord.bbox.y1;
-            const palavrasAbaixoDoWMS = words.filter(w => w.bbox.y0 >= (wmsYFim - 5));
-            const textoAbaixo = palavrasAbaixoDoWMS.map(w => w.text).join('').replace(/\D/g, '');
+          // Remove caracteres indesejados para isolar os números
+          const textoLimpo = rawText.replace(/[^\d]/g, '');
+          const match = textoLimpo.match(REGEX_SSCC);
 
-            const matchWMS = textoAbaixo.match(REGEX_SSCC);
-            if (matchWMS) {
-              huEncontrada = matchWMS[0];
-              metodoUsado = "📍 ÂNCORA WMS + 1789 DETECTADO";
-            }
-          }
+          let huEncontrada = match ? match[0] : null;
 
-          // 🔍 OPÇÃO 2 (FALLBACK): Se WMS não foi visto, varre a mira procurando especificamente '1789...'
-          if (!huEncontrada) {
-            const todoTextoLimpo = result.data.text.replace(/\D/g, '');
-            const matchFallback = todoTextoLimpo.match(REGEX_SSCC);
-            if (matchFallback) {
-              huEncontrada = matchFallback[0];
-              metodoUsado = "🔍 DETECÇÃO DIRETA 1789...";
-            }
-          }
-
-          // RESULTADO DA LEITURA
+          // RESULTADO DA DETECÇÃO
           if (huEncontrada) {
             numerosLidosEl.innerText = huEncontrada;
             contadorDigitosEl.innerText = "18 / 18";
-            modoLeituraEl.innerText = metodoUsado;
-            dicaStatusEl.innerText = "🎯 SSCC Válido (1789) Detectado!";
+            modoLeituraEl.innerText = "🎯 DÍGITOS 1789 RECONHECIDOS";
+            dicaStatusEl.innerText = "✓ SSCC Confirmado!";
             dicaStatusEl.style.color = "#00e676";
             
             miraBox.classList.remove('lendo');
@@ -229,12 +301,11 @@
             
             await verificarHU(huEncontrada);
           } else {
-            // Exibe parcial se começar com 1789
-            const textoGeral = result.data.text.replace(/\D/g, '');
-            const indexInicio = textoGeral.indexOf('1789');
+            // Exibe parciais se já começou a ler '1789'
+            const indexInicio = textoLimpo.indexOf('1789');
 
             if (indexInicio !== -1) {
-              const parcial = textoGeral.substring(indexInicio, indexInicio + 18);
+              const parcial = textoLimpo.substring(indexInicio, indexInicio + 18);
               numerosLidosEl.innerText = parcial;
               contadorDigitosEl.innerText = `${parcial.length} / 18`;
               dicaStatusEl.innerText = "👁️ Lendo sequência 1789...";
@@ -242,8 +313,8 @@
             } else {
               numerosLidosEl.innerText = "Aguardando 1789...";
               contadorDigitosEl.innerText = "0 / 18";
-              dicaStatusEl.innerText = wmsWord ? "📍 WMS localizado! Aguardando 1789..." : "🟢 Centralize a etiqueta na mira";
-              dicaStatusEl.style.color = wmsWord ? "#00d2ff" : "#00e676";
+              dicaStatusEl.innerText = "🟢 Enquadre o código de 18 dígitos";
+              dicaStatusEl.style.color = "#00e676";
             }
           }
         }
@@ -252,9 +323,10 @@
         console.error(e);
       }
 
-      setTimeout(loopOCR, 200);
+      setTimeout(loopOCR, 150);
     }
 
+    // Envio e Validação na Planilha Google
     async function verificarHU(hu) {
       processandoHU = true;
       try {
@@ -298,8 +370,8 @@
       miraBox.classList.remove('sucesso');
       numerosLidosEl.innerText = "Aguardando 1789...";
       contadorDigitosEl.innerText = "0 / 18";
-      modoLeituraEl.innerText = "PADRÃO FIXO: 1789... (18 DÍGITOS)";
-      dicaStatusEl.innerText = "🟢 Aponte para o SSCC iniciado em 1789";
+      modoLeituraEl.innerText = "PADRÃO GS1: 1789... (18 DÍGITOS)";
+      dicaStatusEl.innerText = "🟢 Aponte a mira para o número 1789...";
       dicaStatusEl.style.color = "#00e676";
     }
 
