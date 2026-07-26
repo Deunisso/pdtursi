@@ -13,7 +13,63 @@ html, body {
   background-color: #000;
 }
 
-/* Container que ocupa 100% da tela do celular */
+/* TELA SOBREPOSTA DE INICIALIZAÇÃO */
+.overlay-start {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #111;
+  z-index: 999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.start-box {
+  background: #222;
+  border: 2px solid #1a73e8;
+  border-radius: 16px;
+  padding: 30px 20px;
+  text-align: center;
+  color: #fff;
+  max-width: 350px;
+  width: 100%;
+}
+
+.start-box h2 {
+  margin-bottom: 10px;
+  color: #8ab4f8;
+}
+
+.start-box p {
+  font-size: 0.9rem;
+  color: #ccc;
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+
+.start-box button {
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 15px 30px;
+  font-size: 1rem;
+  font-weight: bold;
+  border-radius: 30px;
+  cursor: pointer;
+  width: 100%;
+  box-shadow: 0 4px 15px rgba(26, 115, 232, 0.4);
+}
+
+.start-box button:active {
+  background: #1557b0;
+  transform: scale(0.98);
+}
+
+/* Container da Câmera em Tela Cheia */
 .scanner-fullscreen {
   position: relative;
   width: 100vw;
@@ -26,7 +82,6 @@ html, body {
   height: 100%;
 }
 
-/* Força o vídeo a preencher a tela inteira sem distorcer */
 #reader video {
   width: 100% !important;
   height: 100% !important;
@@ -52,7 +107,7 @@ html, body {
   box-shadow: 0 0 15px #00ff66, 0 0 25px #00ff66;
 }
 
-/* Miras dos Cantos da Tela */
+/* Miras */
 .mira {
   position: absolute;
   width: 35px;
@@ -96,12 +151,7 @@ html, body {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #34a853;
-}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #34a853; }
 .dot.sincronizando { background: #fbbc04; animation: pulse 1s infinite; }
 .dot.erro { background: #ea4335; }
 
@@ -116,28 +166,11 @@ html, body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
-.counter-label {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: bold;
-  letter-spacing: 1px;
-  color: #8ab4f8;
-}
+.counter-label { display: block; font-size: 0.7rem; font-weight: bold; letter-spacing: 1px; color: #8ab4f8; }
+.counter-number { font-size: 2.2rem; font-weight: 900; color: #ffffff; line-height: 1; margin: 2px 0; }
+.counter-sub { font-size: 0.75rem; color: #bdc1c6; }
 
-.counter-number {
-  font-size: 2.2rem;
-  font-weight: 900;
-  color: #ffffff;
-  line-height: 1;
-  margin: 2px 0;
-}
-
-.counter-sub {
-  font-size: 0.75rem;
-  color: #bdc1c6;
-}
-
-/* HUD PAINEL INFERIOR (ÚLTIMA LEITURA) */
+/* HUD PAINEL INFERIOR */
 .hud-bottom {
   position: absolute;
   bottom: 25px;
@@ -157,51 +190,15 @@ html, body {
   box-shadow: 0 6px 25px rgba(0,0,0,0.6);
 }
 
-.hud-bottom.sem-leitura {
-  border-color: rgba(255, 255, 255, 0.2);
-}
+.hud-bottom.sucesso { background: rgba(20, 80, 40, 0.9); border-color: #00ff66; box-shadow: 0 0 25px rgba(0, 255, 102, 0.5); }
+.hud-bottom.alerta { background: rgba(120, 20, 20, 0.9); border-color: #ff3333; box-shadow: 0 0 25px rgba(255, 51, 51, 0.5); }
 
-.hud-bottom.sucesso {
-  background: rgba(20, 80, 40, 0.9);
-  border-color: #00ff66;
-  box-shadow: 0 0 25px rgba(0, 255, 102, 0.5);
-}
-
-.hud-bottom.alerta {
-  background: rgba(120, 20, 20, 0.9);
-  border-color: #ff3333;
-  box-shadow: 0 0 25px rgba(255, 51, 51, 0.5);
-}
-
-.bip-status-title {
-  font-size: 0.8rem;
-  font-weight: bold;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: #aaa;
-  margin-bottom: 4px;
-}
-
+.bip-status-title { font-size: 0.8rem; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; color: #aaa; margin-bottom: 4px; }
 .hud-bottom.sucesso .bip-status-title { color: #00ff66; }
 .hud-bottom.alerta .bip-status-title { color: #ff8888; }
 
-.bip-hu-code {
-  font-size: 1.4rem;
-  font-weight: 900;
-  letter-spacing: 1px;
-  word-break: break-all;
-}
+.bip-hu-code { font-size: 1.4rem; font-weight: 900; letter-spacing: 1px; word-break: break-all; }
+.bip-detalhes { font-size: 0.85rem; color: #ddd; margin-top: 4px; }
 
-.bip-detalhes {
-  font-size: 0.85rem;
-  color: #ddd;
-  margin-top: 4px;
-}
-
-@keyframes varredura {
-  0% { top: 10%; opacity: 0.8; }
-  50% { top: 85%; opacity: 1; }
-  100% { top: 10%; opacity: 0.8; }
-}
-
+@keyframes varredura { 0% { top: 10%; opacity: 0.8; } 50% { top: 85%; opacity: 1; } 100% { top: 10%; opacity: 0.8; } }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
