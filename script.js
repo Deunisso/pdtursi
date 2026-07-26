@@ -25,8 +25,9 @@ let workerOCR = null;
 let lanternaLigada = false;
 let listaPendentesGlobal = [];
 
-// 🛡️ BUFFER DE CERTEZA ABSOLUTA: Armazena leituras consecutivas para evitar erros
-let bufferConsenso = [];
+// 🛡️ BUFFER DE CERTEZA: Armazena a última leitura para confirmar em 2 quadros seguidos
+let ultimaLeituraCandidata = "";
+let contagemConfirma = 0;
 
 // Som de Bip ao confirmar a HU
 function tocarBip() {
@@ -76,22 +77,6 @@ if (btnLanterna) {
 // Extrai estritamente caracteres numéricos
 function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
-}
-
-// Algoritmo de Binarização Pura (Preto e Branco sem ruídos de linhas)
-function binarizarImagem(ctx, width, height) {
-  const imgData = ctx.getImageData(0, 0, width, height);
-  const data = imgData.data;
-  const limiar = 135; // Corte de luminância para alto contraste
-
-  for (let i = 0; i < data.length; i += 4) {
-    const luminancia = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-    const cor = luminancia < limiar ? 0 : 255;
-    data[i] = cor;     // Red
-    data[i + 1] = cor; // Green
-    data[i + 2] = cor; // Blue
-  }
-  ctx.putImageData(imgData, 0, 0);
 }
 
 // Busca e Atualiza o Dashboard e as HUs na Planilha
@@ -201,26 +186,26 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização do Tesseract OCR com Suporte à Palavra "WMS"
+// Inicialização do Tesseract OCR Otimizado
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Carregando IA de Alta Precisão...";
+  dicaStatusEl.innerText = "⚡ Carregando IA de Precisão...";
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    // Permite números, letras maiúsculas e separadores para localizar o WMS
-    tessedit_char_whitelist: '0123456789WMSABCDEFGHIJKLMNOPQRSTUVWXYZ.:-', 
-    // PSM 6: Assume um bloco de texto uniforme (lê WMS em cima e código embaixo)
-    tessedit_pageseg_mode: '6', 
+    // Lê apenas números e letras essenciais para não gerar ruído
+    tessedit_char_whitelist: '0123456789WMSABR', 
+    // PSM 11: Texto esparso! Encontra os números onde quer que estejam no quadro, ignorando tabelas
+    tessedit_pageseg_mode: '11', 
   });
 
-  dicaStatusEl.innerText = "🟢 Alinhe o 'WMS' e o número '1789...' na mira";
+  dicaStatusEl.innerText = "🟢 Alinhe o número '1789...' na mira";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// Loop Principal focado em Ancoragem por "WMS" + Certeza Absoluta
+// Loop de Leitura OCR Ultra-Responsivo
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 100);
@@ -234,11 +219,11 @@ async function loopLeituraOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // 🎯 CORTE CIRÚRGICO EXPANDIDO (Captura WMS + Linha do Código abaixo)
-      const CROP_W = vw * 0.55;  // Metade esquerda da etiqueta
-      const CROP_H = vh * 0.25;  // Altura suficiente para pegar WMS em cima e 1789 embaixo
-      const CROP_X = vw * 0.03;  // Margem esquerda
-      const CROP_Y = vh * 0.20;  // Pega a zona do cabeçalho WMS
+      // 🎯 CORTE FOCADO NO MEIO DA ETIQUETA (Evita WMS alto, ABR baixo e Código de Barras)
+      const CROP_W = vw * 0.65;  // Largura confortável
+      const CROP_H = vh * 0.28;  // Altura focada exatamente no meio (linha do 1789)
+      const CROP_X = vw * 0.02;  // Margem à esquerda
+      const CROP_Y = vh * 0.18;  // Pega abaixo do cabeçalho WMS e acima dos códigos inferiores
 
       const SCALE = 2.0;
       const PADDING = 20;
@@ -248,111 +233,91 @@ async function loopLeituraOCR() {
       
       const ctx = canvas.getContext('2d');
       
+      // Fundo branco limpo
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // Desenha a imagem na proporção ampliada (sem o filtro preto/branco rígido!)
       ctx.drawImage(
         video, 
         CROP_X, CROP_Y, CROP_W, CROP_H, 
         PADDING, PADDING, CROP_W * SCALE, CROP_H * SCALE
       );
 
-      binarizarImagem(ctx, canvas.width, canvas.height);
-
-      // Leitura da IA estruturada por Linhas
+      // Leitura Direta pela IA
       const result = await workerOCR.recognize(canvas);
-      const linhas = result.data.lines || [];
-      
-      let yMinimoWMS = 0;
-      let wmsDetectado = false;
-      let candidatoHU = null;
+      const textoPuro = result.data.text || "";
+      const apenasNumeros = extrairNumeros(textoPuro);
 
-      // 1. ANCORAGEM ESPACIAL: Localiza a altura (Y) exatamente onde está o "WMS"
-      for (const linha of linhas) {
-        const textoLinha = (linha.text || "").toUpperCase();
-        if (textoLinha.includes('WMS')) {
-          yMinimoWMS = linha.bbox.y0; // Guarda a linha horizontal do WMS
-          wmsDetectado = true;
-          break;
-        }
-      }
-
-      // 2. BUSCA SELETIVA: Procura o código 1789 APENAS na altura do WMS ou abaixo dele
+      // Expressão Regular Rígida: Exatos 18 dígitos começando com 1789
       const REGEX_SSCC_EXATO = /1789\d{14}/;
+      const matchOCR = apenasNumeros.match(REGEX_SSCC_EXATO);
 
-      for (const linha of linhas) {
-        // Se encontramos WMS, só aceitamos números que estejam abaixo dele (y0 >= yMinimoWMS - tolerância)
-        if (!wmsDetectado || linha.bbox.y0 >= (yMinimoWMS - 10)) {
-          const numsLinha = extrairNumeros(linha.text);
-          const match = numsLinha.match(REGEX_SSCC_EXATO);
-          
-          if (match && match[0].length === 18) {
-            candidatoHU = match[0];
-            break; // Encontrou um candidato válido abaixo do WMS
-          }
+      if (matchOCR && matchOCR[0].length === 18) {
+        const huLida = matchOCR[0];
+
+        // 🛡️ TRAVA DE CERTEZA ABSOLUTA (Exige 2 quadros idênticos seguidos)
+        if (huLida === ultimaLeituraCandidata) {
+          contagemConfirma++;
+        } else {
+          ultimaLeituraCandidata = huLida;
+          contagemConfirma = 1;
         }
-      }
 
-      // 3. FILTRO DE CERTEZA ABSOLUTA (Consenso de 3 leituras consecutivas idênticas)
-      if (candidatoHU) {
-        bufferConsenso.push(candidatoHU);
-        if (bufferConsenso.length > 3) bufferConsenso.shift(); // Mantém apenas os 3 últimos
-
-        // Verifica se todas as 3 leituras no buffer são EXATAMENTE IGUAIS
-        const certezaAbsoluta = bufferConsenso.length === 3 && bufferConsenso.every(val => val === candidatoHU);
-
-        if (certezaAbsoluta && !processandoHU) {
+        // Se confirmou 2 vezes seguidas (~200ms), aprova a leitura!
+        if (contagemConfirma >= 2 && !processandoHU) {
           processandoHU = true;
 
-          modoLeituraEl.innerText = "🔒 WMS + CÓDIGO CONFIRMADO COM CERTEZA";
+          modoLeituraEl.innerText = "🔒 SSCC 18 DÍGITOS CONFIRMADO";
           dicaStatusEl.innerText = "✓ LEITURA 100% PRECISA VERIFICADA!";
           dicaStatusEl.style.color = "#00e676";
 
-          spanNumsEstabilizados.innerText = candidatoHU;
+          spanNumsEstabilizados.innerText = huLida;
           spanNumsAtivos.innerText = "";
           contadorDigitosEl.innerText = "18 / 18";
 
           miraBox.classList.remove('lendo');
           miraBox.classList.add('sucesso');
 
-          await verificarHU(candidatoHU);
+          await verificarHU(huLida);
           return;
         } else {
-          // Exibe feedback visual de que a IA está confirmando para não errar
-          modoLeituraEl.innerText = wmsDetectado ? "âNCORA 'WMS' LOCALIZADA" : "BUSCANDO ÂNCORA 'WMS'...";
-          dicaStatusEl.innerText = `🤖 Confirmando certeza: ${bufferConsenso.length}/3 leituras idênticas...`;
+          // Feedback visual imediato de que leu os 18 dígitos e está confirmando
+          modoLeituraEl.innerText = "⚡ VERIFICANDO PRECISÃO...";
+          dicaStatusEl.innerText = "🤖 Confirmando leitura fixa...";
           dicaStatusEl.style.color = "#ffd700";
 
-          spanNumsEstabilizados.innerText = candidatoHU.substring(0, 4);
-          spanNumsAtivos.innerText = candidatoHU.substring(4);
-          contadorDigitosEl.innerText = "18 / 18 (Verificando)";
+          spanNumsEstabilizados.innerText = huLida.substring(0, 4);
+          spanNumsAtivos.innerText = huLida.substring(4);
+          contadorDigitosEl.innerText = "18 / 18";
         }
-      } else {
-        // Se não encontrou código limpo, esvazia o buffer de consenso gradualmente
-        if (bufferConsenso.length > 0) bufferConsenso.shift();
 
-        // Tenta dar feedback visual de alinhamento com o que estiver na tela
-        const textoCompleto = extrairNumeros(result.data.text || "");
-        const indexInicio = textoCompleto.indexOf('1789');
+      } else {
+        // Se perdeu o foco ou está lendo incompleto
+        ultimaLeituraCandidata = "";
+        contagemConfirma = 0;
+
+        const indexInicio = apenasNumeros.indexOf('1789');
+
+        modoLeituraEl.innerText = "MODO IA: LEITURA ESPARSA (18 DÍGITOS)";
 
         if (indexInicio !== -1) {
-          const parcialLida = textoCompleto.substring(indexInicio, indexInicio + 18);
+          const parcialLida = apenasNumeros.substring(indexInicio, indexInicio + 18);
           const totalLido = parcialLida.length;
 
           spanNumsEstabilizados.innerText = parcialLida.substring(0, Math.min(4, totalLido));
           spanNumsAtivos.innerText = parcialLida.substring(4) + (totalLido < 18 ? "..." : "");
           contadorDigitosEl.innerText = `${totalLido} / 18`;
           
-          dicaStatusEl.innerText = wmsDetectado ? "🟢 WMS achado! Segure firme no código..." : "👁️ Alinhando sequência 1789...";
+          dicaStatusEl.innerText = "👁️ Alinhando sequência 1789...";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           spanNumsEstabilizados.innerText = "Aguardando";
           spanNumsAtivos.innerText = "...";
           contadorDigitosEl.innerText = "0 / 18";
           
-          dicaStatusEl.innerText = "🟢 Alinhe o 'WMS' e o número '1789...' na mira";
+          dicaStatusEl.innerText = "🟢 Alinhe o número '1789...' na mira";
           dicaStatusEl.style.color = "#00e676";
-          modoLeituraEl.innerText = "MODO IA: ANCORAGEM WMS + CONSENSO";
         }
       }
     }
@@ -415,15 +380,16 @@ function resetarVisor() {
   }
   
   contadorDigitosEl.innerText = "0 / 18";
-  modoLeituraEl.innerText = "MODO IA: ANCORAGEM WMS + CONSENSO";
-  dicaStatusEl.innerText = "🟢 Alinhe o 'WMS' e o número '1789...' na mira";
+  modoLeituraEl.innerText = "MODO IA: LEITURA ESPARSA (18 DÍGITOS)";
+  dicaStatusEl.innerText = "🟢 Alinhe o número '1789...' na mira";
   dicaStatusEl.style.color = "#00e676";
   
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Zera o buffer de segurança para a próxima leitura
-  bufferConsenso = [];
+  // Zera as variáveis de segurança
+  ultimaLeituraCandidata = "";
+  contagemConfirma = 0;
   processandoHU = false;
   
   setTimeout(loopLeituraOCR, 200);
