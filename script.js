@@ -253,7 +253,7 @@ async function loopOCR() {
     
     if (vw > 0 && vh > 0) {
       const CROP_W = vw * 0.92;
-      const CROP_H = vh * 0.38;
+      const CROP_H = vh * 0.22;
       
       canvas.width = CROP_W * 2;
       canvas.height = CROP_H * 2;
