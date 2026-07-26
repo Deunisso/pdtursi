@@ -2,58 +2,57 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Scanner Tela Inteira (HUD)</title>
-
-  <!-- Biblioteca para leitura de Código de Barras -->
-  <script src="https://unpkg.com/html5-qrcode"></script>
-
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leitor Rápido SSCC (GS1-128)</title>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
+    #reader { width: 100%; max-width: 500px; margin: auto; border-radius: 12px; overflow: hidden; }
+    #result { margin-top: 20px; font-size: 1.2rem; font-weight: bold; color: #2e7d32; word-break: break-all; }
+    .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; }
+  </style>
 </head>
 <body>
 
-  <!-- TELA INICIAL DE PERMISSÃO (Evita tela preta por bloqueio do navegador) -->
-  <div id="overlay-inicio" class="overlay-start">
-    <div class="start-box">
-      <h2>LX02</h2>
-      <p>Toque no botão abaixo para ativar a câmera e começar a conferência.</p>
-      <button id="btn-iniciar" onclick="iniciarAplicacao()">LIGAR CÂMERA</button>
-    </div>
+  <h2>Leitor de Código SSCC / GS1</h2>
+  <div id="reader"></div>
+  
+  <div class="card" style="margin-top: 20px;">
+    <span>Último Código Lido:</span>
+    <div id="result">Aguardando leitura...</div>
   </div>
 
-  <!-- CÂMERA EM TELA INTEIRA -->
-  <div id="scanner-container" class="scanner-fullscreen">
-    <div id="reader"></div>
+  <script>
+    // Regex para validar o padrão (00) + 18 dígitos ou apenas 00 + 18 dígitos
+    const ssccRegex = /(?:^\(00\)|^00)(\d{18})$/;
 
-    <!-- Laser e Miras de Varredura -->
-    <div class="laser-line"></div>
-    <div class="mira top-left"></div>
-    <div class="mira top-right"></div>
-    <div class="mira bottom-left"></div>
-    <div class="mira bottom-right"></div>
+    function onScanSuccess(decodedText) {
+      // Limpa caracteres especiais do retorno se houver
+      const cleanText = decodedText.replace(/\s+/g, '');
+      
+      // Valida se é o código esperado de 18 dígitos do GS1 (00)
+      const match = cleanText.match(ssccRegex);
+      
+      if (match) {
+        const codigoFormatado = `(00)${match[1]}`;
+        document.getElementById('result').innerText = codigoFormatado;
+        
+        // Feedback sonoro/vibratório de leitura rápida
+        if (navigator.vibrate) navigator.vibrate(100);
+      }
+    }
 
-    <!-- HUD SOBREPOSTO: PAINEL SUPERIOR -->
-    <div class="hud-top">
-      <div class="sync-badge">
-        <span id="sync-dot" class="dot"></span>
-        <span id="sync-texto">Conectando...</span>
-      </div>
+    const html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader", 
+      { 
+        fps: 30, // 30 quadros por segundo para leitura ultra-rápida
+        qrbox: { width: 350, height: 150 }, // Caixa retangular ideal para códigos de barras longos
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true } // Ativa aceleração de hardware nativa
+      },
+      /* verbose= */ false
+    );
 
-      <div class="counter-box">
-        <span class="counter-label">FALTAM CONFERIR</span>
-        <span id="qtd-restante" class="counter-number">--</span>
-        <span id="qtd-total" class="counter-sub">de -- itens</span>
-      </div>
-    </div>
-
-    <!-- HUD SOBREPOSTO: PAINEL INFERIOR -->
-    <div id="card-ultimo-bip" class="hud-bottom sem-leitura">
-      <div class="bip-status-title" id="bip-status-title">Aguardando leitura...</div>
-      <div class="bip-hu-code" id="bip-hu-code">APONTE A CÂMERA</div>
-      <div class="bip-detalhes" id="bip-detalhes">Posição / Bin aparecerão aqui</div>
-    </div>
-  </div>
-
-  <script src="script.js"></script>
+    html5QrcodeScanner.render(onScanSuccess);
+  </script>
 </body>
 </html>
