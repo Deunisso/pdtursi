@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WMS - Leitor de HU (OCR Inteligente)</title>
+  <title>WMS - Leitor de HU (Padrão 1789)</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -25,8 +25,8 @@
     #video-container { position: relative; flex: 1; margin: 8px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2a2a3a; background: #000; display: flex; align-items: center; justify-content: center; }
     video { width: 100%; height: 100%; object-fit: cover; }
 
-    /* MIRA ADAPTATIVA (Espaço suficiente para pegar o WMS + SSCC) */
-    .mira { position: absolute; top: 30%; left: 4%; width: 92%; height: 35%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); border-radius: 8px; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 8px 12px; transition: all 0.2s ease; }
+    /* Mira Adaptativa */
+    .mira { position: absolute; top: 32%; left: 4%; width: 92%; height: 32%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); border-radius: 8px; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 8px 12px; transition: all 0.2s ease; }
     .mira.lendo { border-color: #ffd700; }
     .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.15); box-shadow: 0 0 0 999px rgba(0,0,0,0.65), 0 0 20px #00e676; }
 
@@ -35,7 +35,7 @@
     .visor-numeros { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 900; color: #00e676; text-align: center; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(0,0,0,0.9); background: rgba(0,0,0,0.8); padding: 6px; border-radius: 4px; word-break: break-all; margin: auto 0; }
     .visor-status { font-size: 10px; color: #ffd700; text-align: center; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.9); background: rgba(0,0,0,0.6); padding: 3px; border-radius: 4px; }
 
-    /* Notificação Discreta */
+    /* Notificação Discreta no Topo */
     #notificacao-discreta { display: none; position: absolute; top: 12px; left: 5%; width: 90%; background: #12121a; border: 2px solid #00e676; border-radius: 8px; padding: 10px 15px; z-index: 100; box-shadow: 0 4px 15px rgba(0,230,118,0.4); text-align: left; animation: slideDown 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
     #notificacao-discreta .titulo { font-size: 11px; color: #00e676; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
     #notificacao-discreta .hu-codigo { font-family: monospace; font-size: 17px; color: #fff; font-weight: bold; margin-top: 2px; letter-spacing: 1.5px; }
@@ -60,7 +60,7 @@
       </div>
     </div>
 
-    <!-- Câmera com Detecção Inteligente -->
+    <!-- Câmera com Leitura Filtrada por 1789 -->
     <div id="video-container">
       <video id="webcam" autoplay playsinline></video>
       
@@ -73,7 +73,7 @@
       <!-- Mira Adaptativa -->
       <div id="mira-box" class="mira">
         <div class="visor-topo">
-          <span id="modo-leitura">MODO: ÂNCORA WMS + DÍGITOS</span>
+          <span id="modo-leitura">PADRÃO FIXO: 1789... (18 DÍGITOS)</span>
           <span id="contador-digitos">0 / 18</span>
         </div>
         <div id="numeros-lidos" class="visor-numeros">Aguardando...</div>
@@ -87,7 +87,7 @@
   <script>
     // =================================================================
     // ⚠️ COLOQUE AQUI A SUA URL DO GOOGLE APPS SCRIPT:
-    const SCRIPT_URL = "SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
     // =================================================================
 
     const video = document.getElementById('webcam');
@@ -148,16 +148,15 @@
     });
 
     async function iniciarOCR() {
-      dicaStatusEl.innerText = "⚡ Carregando Reconhecimento Visual...";
+      dicaStatusEl.innerText = "⚡ Carregando Reconhecedor 1789...";
       
       workerOCR = await Tesseract.createWorker('eng');
       
-      // Aceita números e a palavra WMS
       await workerOCR.setParameters({
         tessedit_char_whitelist: '0123456789WMSwms',
       });
 
-      dicaStatusEl.innerText = "🟢 Enquadre a palavra WMS ou o número na mira";
+      dicaStatusEl.innerText = "🟢 Aponte para o SSCC iniciado em 1789";
       dicaStatusEl.style.color = "#00e676";
       ocrAtivo = true;
 
@@ -177,44 +176,43 @@
         const vh = video.videoHeight;
         
         if (vw > 0 && vh > 0) {
-          // Crop focado na área central (30% a 65% da tela)
           canvas.width = vw * 0.92;
-          canvas.height = vh * 0.35;
+          canvas.height = vh * 0.32;
           const ctx = canvas.getContext('2d');
           
-          ctx.drawImage(video, vw * 0.04, vh * 0.30, vw * 0.92, vh * 0.35, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(video, vw * 0.04, vh * 0.32, vw * 0.92, vh * 0.32, 0, 0, canvas.width, canvas.height);
 
           const result = await workerOCR.recognize(canvas);
           const words = result.data.words || [];
 
-          // 🔍 OPÇÃO 1: Procura a palavra "WMS"
+          // 🔍 OPÇÃO 1: Procura a palavra "WMS" e busca estritamente o código '1789...' abaixo
           const wmsWord = words.find(w => /WMS/i.test(w.text));
 
           let huEncontrada = null;
           let metodoUsado = "";
 
-          if (wmsWord) {
-            // Se achou WMS, pega a posição Y de onde o WMS termina
-            const wmsYFim = wmsWord.bbox.y1;
+          // REGRA DE OURO: O código DEVE obrigatoriamente começar com 1789 e ter 18 dígitos no total
+          const REGEX_SSCC = /1789\d{14}/;
 
-            // Filtra apenas os números que estão localizados ABAIXO da palavra WMS
+          if (wmsWord) {
+            const wmsYFim = wmsWord.bbox.y1;
             const palavrasAbaixoDoWMS = words.filter(w => w.bbox.y0 >= (wmsYFim - 5));
             const textoAbaixo = palavrasAbaixoDoWMS.map(w => w.text).join('').replace(/\D/g, '');
 
-            const matchWMS = textoAbaixo.match(/1789\d{14}/) || textoAbaixo.match(/1\d{17}/);
+            const matchWMS = textoAbaixo.match(REGEX_SSCC);
             if (matchWMS) {
               huEncontrada = matchWMS[0];
-              metodoUsado = "📍 ÂNCORA WMS DETECTADA";
+              metodoUsado = "📍 ÂNCORA WMS + 1789 DETECTADO";
             }
           }
 
-          // 🔍 OPÇÃO 2 (FALLBACK): Se não achou WMS ou não achou o código abaixo dele, varre a imagem inteira da mira
+          // 🔍 OPÇÃO 2 (FALLBACK): Se WMS não foi visto, varre a mira procurando especificamente '1789...'
           if (!huEncontrada) {
             const todoTextoLimpo = result.data.text.replace(/\D/g, '');
-            const matchFallback = todoTextoLimpo.match(/1789\d{14}/) || todoTextoLimpo.match(/1\d{17}/);
+            const matchFallback = todoTextoLimpo.match(REGEX_SSCC);
             if (matchFallback) {
               huEncontrada = matchFallback[0];
-              metodoUsado = "🔍 LEITURA DIRETA SSCC";
+              metodoUsado = "🔍 DETECÇÃO DIRETA 1789...";
             }
           }
 
@@ -223,7 +221,7 @@
             numerosLidosEl.innerText = huEncontrada;
             contadorDigitosEl.innerText = "18 / 18";
             modoLeituraEl.innerText = metodoUsado;
-            dicaStatusEl.innerText = "🎯 SSCC Confirmado!";
+            dicaStatusEl.innerText = "🎯 SSCC Válido (1789) Detectado!";
             dicaStatusEl.style.color = "#00e676";
             
             miraBox.classList.remove('lendo');
@@ -231,23 +229,21 @@
             
             await verificarHU(huEncontrada);
           } else {
-            // Exibe a parcial caso esteja montando os dígitos
+            // Exibe parcial se começar com 1789
             const textoGeral = result.data.text.replace(/\D/g, '');
-            if (textoGeral.length > 0) {
-              const parcial = textoGeral.substring(0, 18);
+            const indexInicio = textoGeral.indexOf('1789');
+
+            if (indexInicio !== -1) {
+              const parcial = textoGeral.substring(indexInicio, indexInicio + 18);
               numerosLidosEl.innerText = parcial;
               contadorDigitosEl.innerText = `${parcial.length} / 18`;
-              
-              if (wmsWord) {
-                dicaStatusEl.innerText = "📍 WMS localizado! Buscando número abaixo...";
-                dicaStatusEl.style.color = "#00d2ff";
-              } else {
-                dicaStatusEl.innerText = "👁️ Buscando WMS ou 18 dígitos...";
-                dicaStatusEl.style.color = "#ffd700";
-              }
+              dicaStatusEl.innerText = "👁️ Lendo sequência 1789...";
+              dicaStatusEl.style.color = "#ffd700";
             } else {
-              numerosLidosEl.innerText = "Aguardando...";
+              numerosLidosEl.innerText = "Aguardando 1789...";
               contadorDigitosEl.innerText = "0 / 18";
+              dicaStatusEl.innerText = wmsWord ? "📍 WMS localizado! Aguardando 1789..." : "🟢 Centralize a etiqueta na mira";
+              dicaStatusEl.style.color = wmsWord ? "#00d2ff" : "#00e676";
             }
           }
         }
@@ -300,10 +296,10 @@
 
     function resetarVisor() {
       miraBox.classList.remove('sucesso');
-      numerosLidosEl.innerText = "Aguardando...";
+      numerosLidosEl.innerText = "Aguardando 1789...";
       contadorDigitosEl.innerText = "0 / 18";
-      modoLeituraEl.innerText = "MODO: ÂNCORA WMS + DÍGITOS";
-      dicaStatusEl.innerText = "🟢 Enquadre a palavra WMS ou o número na mira";
+      modoLeituraEl.innerText = "PADRÃO FIXO: 1789... (18 DÍGITOS)";
+      dicaStatusEl.innerText = "🟢 Aponte para o SSCC iniciado em 1789";
       dicaStatusEl.style.color = "#00e676";
     }
 
