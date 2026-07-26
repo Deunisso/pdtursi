@@ -12,6 +12,15 @@
 </head>
 <body>
 
+  <!-- TELA INICIAL DE PERMISSÃO (Evita tela preta por bloqueio do navegador) -->
+  <div id="overlay-inicio" class="overlay-start">
+    <div class="start-box">
+      <h2>📷 Leitor de HUs</h2>
+      <p>Toque no botão abaixo para ativar a câmera e começar a conferência.</p>
+      <button id="btn-iniciar" onclick="iniciarAplicacao()">LIGAR CÂMERA</button>
+    </div>
+  </div>
+
   <!-- CÂMERA EM TELA INTEIRA -->
   <div id="scanner-container" class="scanner-fullscreen">
     <div id="reader"></div>
@@ -23,7 +32,7 @@
     <div class="mira bottom-left"></div>
     <div class="mira bottom-right"></div>
 
-    <!-- HUD SOBREPOSTO: PAINEL SUPERIOR (Status e Faltantes) -->
+    <!-- HUD SOBREPOSTO: PAINEL SUPERIOR -->
     <div class="hud-top">
       <div class="sync-badge">
         <span id="sync-dot" class="dot"></span>
@@ -37,7 +46,7 @@
       </div>
     </div>
 
-    <!-- HUD SOBREPOSTO: PAINEL INFERIOR (Última HU Bipada) -->
+    <!-- HUD SOBREPOSTO: PAINEL INFERIOR -->
     <div id="card-ultimo-bip" class="hud-bottom sem-leitura">
       <div class="bip-status-title" id="bip-status-title">Aguardando leitura...</div>
       <div class="bip-hu-code" id="bip-hu-code">APONTE A CÂMERA</div>
