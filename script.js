@@ -3,7 +3,7 @@
 // =================================================================
 // ⚠️ CONFIGURAÇÃO: Insira a sua URL do Google Apps Script
 // =================================================================
-const SCRIPT_URL = "SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
 // Mapeamento dos elementos da tela (DOM)
 const video = document.getElementById('webcam');
