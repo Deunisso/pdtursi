@@ -5,7 +5,7 @@ let listaHUs = [];
 let html5QrCode;
 let aguardandoProcessamento = false;
 
-// Limpa caracteres especiais deixando apenas os dígitos do código lido
+// Limpa caracteres especiais deixando apenas os números
 function limparCodigoHU(textoRaw) {
   return String(textoRaw).replace(/[^\d]/g, '').trim();
 }
@@ -22,7 +22,7 @@ async function iniciarAplicacao() {
   await carregarDadosSilenciosamente();
   iniciarCamera();
 
-  // Sincroniza a cada 10 segundos com a planilha
+  // Sincroniza a cada 10 segundos
   setInterval(carregarDadosSilenciosamente, 10000);
 }
 
@@ -83,46 +83,47 @@ function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   }
 }
 
-// 🔍 MOTOR DE LEITURA E PROCESSAMENTO
+// 🎯 LEITURA RÁPIDA FOCADA NO CÓDIGO DE BARRAS
 async function onScanSuccess(decodedText) {
   if (aguardandoProcessamento) return;
 
   const codigoLido = limparCodigoHU(decodedText);
 
-  // Ignora ruídos menores que 4 dígitos
-  if (codigoLido.length < 4) return;
+  // Ignora leituras acidentais muito curtas
+  if (codigoLido.length < 6) return;
 
-  // Busca Inteligente: Cruza HU curta e Código GS1-128 longo com (00)
+  // Busca na lista da planilha
   const itemExistente = listaHUs.find(i => {
     const huPlanilha = limparCodigoHU(String(i.hu));
-    if (huPlanilha === codigoLido) return true;
-    if (codigoLido.length >= 18 && codigoLido.endsWith(huPlanilha)) return true;
-    if (huPlanilha.length >= 18 && huPlanilha.endsWith(codigoLido)) return true;
-    return false;
+    
+    // Compara o código lido com o cadastrado (seja completo ou final da HU)
+    return huPlanilha === codigoLido || 
+           codigoLido.endsWith(huPlanilha) || 
+           huPlanilha.endsWith(codigoLido);
   });
 
   if (navigator.vibrate) navigator.vibrate(100);
 
-  // CÓDIGO NÃO LOCALIZADO NA LISTA
+  // NÃO ENCONTRADO
   if (!itemExistente) {
     exibirPainelInferior("⚠️ NÃO ENCONTRADO", codigoLido, "Código fora da lista de conferência", "alerta");
     return;
   }
 
-  // CÓDIGO JÁ BIPADO
+  // JÁ BIPADO
   if (itemExistente.encontrado) {
     exibirPainelInferior("⚠️ JÁ BIPADA", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "alerta");
     return;
   }
 
-  // SUCESSO AO BIPAR
+  // BIP COM SUCESSO
   aguardandoProcessamento = true;
   itemExistente.encontrado = true;
   
   atualizarContadores();
   exibirPainelInferior("⚡ HU BIPADA!", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "sucesso");
 
-  // Envia a baixa para o Google Sheets
+  // Envia baixa para o Google Sheets
   try {
     const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(itemExistente.hu)}`;
     await fetch(urlBip);
@@ -133,7 +134,7 @@ async function onScanSuccess(decodedText) {
   }
 }
 
-// 📷 INICIALIZAÇÃO INFALÍVEL DA CÂMERA
+// 📷 INICIALIZAÇÃO SIMPLES E ESTÁVEL DA CÂMERA
 async function iniciarCamera() {
   try {
     if (html5QrCode) {
@@ -144,10 +145,10 @@ async function iniciarCamera() {
 
     const config = { 
       fps: 15,
-      qrbox: { width: 280, height: 120 }
+      qrbox: { width: 300, height: 120 }
     };
 
-    // Tenta abrir a câmera traseira de forma padrão
+    // Abre a câmera traseira padrão do navegador de forma nativa
     await html5QrCode.start(
       { facingMode: "environment" }, 
       config, 
@@ -156,24 +157,20 @@ async function iniciarCamera() {
     );
 
   } catch (err) {
-    console.warn("Falha no método padrão de câmera, tentando via ID de dispositivo...", err);
+    console.warn("Abertura direta falhou, buscando dispositivos...", err);
     try {
-      // Método Fallback: Lista todas as câmeras do celular e pega a principal
       const devices = await Html5Qrcode.getCameras();
       if (devices && devices.length > 0) {
-        const backCamera = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('traseira')) || devices[devices.length - 1];
+        const cameraId = devices[devices.length - 1].id;
         await html5QrCode.start(
-          backCamera.id, 
-          { fps: 15, qrbox: { width: 260, height: 110 } }, 
+          cameraId, 
+          { fps: 15, qrbox: { width: 280, height: 100 } }, 
           onScanSuccess, 
           () => {}
         );
-      } else {
-        throw new Error("Nenhuma câmera encontrada no dispositivo.");
       }
     } catch (errFallback) {
-      console.error("Erro fatal de câmera:", errFallback);
-      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Acesse via HTTPS ou permita a câmera no navegador.", "alerta");
+      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Permita o uso da câmera no navegador.", "alerta");
     }
   }
 }
