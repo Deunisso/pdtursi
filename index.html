@@ -2,78 +2,82 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WMS - Leitor de HU (OCR Inteligente)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>WMS - Leitor de HU</title>
+  <!-- Motores de Leitura: OCR (Tesseract) + Barcode (ZXing) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; background: #12121c; color: #fff; margin: 0; padding: 10px; }
-    h1 { font-size: 18px; margin: 5px 0 15px 0; color: #00d2ff; letter-spacing: 1px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    html, body { width: 100%; height: 100vh; overflow: hidden; background: #0f0f15; color: #fff; }
     
-    /* Painel de Contagem */
-    #dashboard { display: flex; justify-content: space-around; max-width: 480px; margin: 0 auto 10px auto; gap: 10px; }
-    .card { background: #1e1e2d; padding: 10px; border-radius: 8px; flex: 1; box-shadow: 0 4px 8px rgba(0,0,0,0.4); border-bottom: 3px solid #333; }
+    /* Layout Container Fixo (Sem rolagem) */
+    .app-container { display: flex; flex-direction: column; height: 100vh; padding: 8px; justify-content: space-between; }
+
+    /* Topo: Painel Slim */
+    #dashboard { display: flex; justify-content: space-between; gap: 8px; height: 65px; }
+    .card { background: #1a1a24; border-radius: 8px; flex: 1; padding: 6px 10px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-bottom: 3px solid #333; }
     .card.found { border-color: #00e676; }
     .card.missing { border-color: #ff5252; }
-    .card p { margin: 0; font-size: 12px; color: #aaa; text-transform: uppercase; font-weight: bold; }
-    .card h2 { margin: 5px 0 0 0; font-size: 28px; }
+    .card p { font-size: 10px; color: #aaa; text-transform: uppercase; font-weight: bold; }
+    .card h2 { font-size: 22px; margin-top: 2px; }
     .found h2 { color: #00e676; }
     .missing h2 { color: #ff5252; }
 
-    /* Câmera e Mira */
-    #video-container { position: relative; max-width: 480px; margin: 0 auto; border-radius: 12px; overflow: hidden; border: 2px solid #333; background: #000; }
-    video { width: 100%; display: block; }
-    .mira { position: absolute; top: 30%; left: 5%; width: 90%; height: 40%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); transition: all 0.2s; pointer-events: none; }
-    .mira.lendo { border-color: #ffd700; background: rgba(255, 215, 0, 0.05); }
-    .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.2); }
+    /* Câmera Central (Ocupa o resto da tela) */
+    #video-container { position: relative; flex: 1; margin: 8px 0; border-radius: 12px; overflow: hidden; border: 2px solid #2a2a3a; background: #000; display: flex; align-items: center; justify-content: center; }
+    video { width: 100%; height: 100%; object-fit: cover; }
 
-    /* VISOR AO VIVO (HUD DE LEITURA) */
-    #visor-hud { max-width: 480px; margin: 10px auto 0 auto; background: #1a1a26; border: 1px solid #333; border-radius: 8px; padding: 10px; text-align: left; }
-    #visor-hud .titulo-hud { font-size: 11px; color: #888; text-transform: uppercase; display: flex; justify-content: space-between; margin-bottom: 4px; }
-    #visor-hud .numeros-lidos { font-family: 'Courier New', Courier, monospace; font-size: 20px; font-weight: bold; color: #00e676; letter-spacing: 2px; min-height: 24px; word-break: break-all; }
-    #visor-hud .dica-status { font-size: 12px; color: #ffd700; margin-top: 4px; font-style: italic; }
+    /* MIRA COM LEITURA DENTRO DO VISOR */
+    .mira { position: absolute; top: 20%; left: 5%; width: 90%; height: 60%; border: 2px dashed #00d2ff; box-shadow: 0 0 0 999px rgba(0,0,0,0.65); border-radius: 8px; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; transition: border-color 0.2s, background 0.2s; }
+    .mira.lendo { border-color: #ffd700; }
+    .mira.sucesso { border-color: #00e676; background: rgba(0, 230, 118, 0.25); }
 
-    /* Canvas invisível para processamento de imagem */
+    /* Textos DENTRO do Visor */
+    .visor-topo { display: flex; justify-content: space-between; font-size: 11px; color: #00d2ff; font-weight: bold; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+    .visor-numeros { font-family: 'Courier New', monospace; font-size: 18px; font-weight: 900; color: #00e676; text-align: center; letter-spacing: 1.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.9); background: rgba(0,0,0,0.6); padding: 6px; border-radius: 6px; word-break: break-all; }
+    .visor-status { font-size: 11px; color: #ffd700; text-align: center; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,0.9); background: rgba(0,0,0,0.5); padding: 3px; border-radius: 4px; }
+
+    /* Canvas Escondido */
     #canvas-processamento { display: none; }
 
     /* PING DE ALERTA */
-    #ping-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 230, 118, 0.96); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; color: #000; animation: flash 0.3s; }
-    #ping-overlay h1 { font-size: 36px; color: #000; margin: 0; font-weight: 900; }
-    #ping-overlay p { font-size: 20px; margin: 10px 0; font-weight: bold; }
-    #ping-hu { background: #000; color: #00e676; padding: 10px 15px; border-radius: 8px; font-size: 24px; font-family: monospace; letter-spacing: 2px; margin-top: 15px; }
-    @keyframes flash { from { opacity: 0; transform: scale(1.1); } to { opacity: 1; transform: scale(1); } }
+    #ping-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 230, 118, 0.96); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; color: #000; animation: flash 0.2s; }
+    #ping-overlay h1 { font-size: 32px; color: #000; margin: 0; font-weight: 900; }
+    #ping-overlay p { font-size: 18px; margin: 8px 0; font-weight: bold; }
+    #ping-hu { background: #000; color: #00e676; padding: 8px 16px; border-radius: 8px; font-size: 22px; font-family: monospace; letter-spacing: 2px; }
+    @keyframes flash { from { opacity: 0; transform: scale(1.05); } to { opacity: 1; transform: scale(1); } }
   </style>
 </head>
 <body>
 
-  <h1>🔍 LEITOR DE ESTOQUE HU (OCR)</h1>
+  <div class="app-container">
+    <!-- Topo Slim -->
+    <div id="dashboard">
+      <div class="card found">
+        <p>Encontradas</p>
+        <h2 id="qtd-encontradas">-</h2>
+      </div>
+      <div class="card missing">
+        <p>Faltam</p>
+        <h2 id="qtd-faltam">-</h2>
+      </div>
+    </div>
 
-  <!-- Painel -->
-  <div id="dashboard">
-    <div class="card found">
-      <p>Encontradas</p>
-      <h2 id="qtd-encontradas">-</h2>
+    <!-- Câmera com Visor Interno -->
+    <div id="video-container">
+      <video id="webcam" autoplay playsinline></video>
+      
+      <!-- Mira com visor tudo dentro -->
+      <div id="mira-box" class="mira">
+        <div class="visor-topo">
+          <span>PADRÃO HU (SSCC)</span>
+          <span id="contador-digitos">0 / 18</span>
+        </div>
+        <div id="numeros-lidos" class="visor-numeros">Aguardando...</div>
+        <div id="dica-status" class="visor-status">Iniciando câmera...</div>
+      </div>
     </div>
-    <div class="card missing">
-      <p>Faltam</p>
-      <h2 id="qtd-faltam">-</h2>
-    </div>
-  </div>
-
-  <!-- Câmera e Mira -->
-  <div id="video-container">
-    <video id="webcam" autoplay playsinline></video>
-    <div id="mira-box" class="mira"></div>
-  </div>
-  
-  <!-- VISOR DE LEITURA EM TEMPO REAL -->
-  <div id="visor-hud">
-    <div class="titulo-hud">
-      <span>Leitura em Tempo Real:</span>
-      <span id="contador-digitos">0 / 18 dígitos</span>
-    </div>
-    <div id="numeros-lidos" class="numeros-lidos">Aguardando números...</div>
-    <div id="dica-status" class="dica-status">⏳ Inicializando Inteligência OCR...</div>
   </div>
 
   <canvas id="canvas-processamento"></canvas>
@@ -81,13 +85,13 @@
   <!-- PING DE ALERTA -->
   <div id="ping-overlay">
     <h1>🚨 HU ENCONTRADA! 🚨</h1>
-    <p>Baixa registrada no Google Sheets!</p>
+    <p>Baixa Registrada!</p>
     <div id="ping-hu">000000000000000000</div>
   </div>
 
   <script>
     // =================================================================
-    // ⚠️ COLOQUE AQUI A URL QUE VOCÊ COPIOU DO GOOGLE APPS SCRIPT:
+    // ⚠️ COLOQUE AQUI A SUA URL DO GOOGLE APPS SCRIPT:
     const SCRIPT_URL = "SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
     // =================================================================
 
@@ -97,12 +101,13 @@
     const contadorDigitosEl = document.getElementById('contador-digitos');
     const dicaStatusEl = document.getElementById('dica-status');
     const canvas = document.getElementById('canvas-processamento');
-    
+
     let ocrAtivo = false;
     let processandoHU = false;
     let workerOCR = null;
+    let barcodeReader = null;
 
-    // 1. Efeito Sonoro (Bip)
+    // Bip sonoro
     function tocarBip() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -120,7 +125,7 @@
       } catch(e) {}
     }
 
-    // 2. Atualizar Contadores da Planilha
+    // Dashboard
     async function atualizarDashboard() {
       try {
         const res = await fetch(SCRIPT_URL);
@@ -130,128 +135,123 @@
       } catch (e) {}
     }
 
-    // 3. Inicializar Câmera Traseira
+    // Iniciar Câmera e Leitores
     navigator.mediaDevices.getUserMedia({ 
       video: { 
         facingMode: "environment", 
-        width: { ideal: 1280 }, 
-        height: { ideal: 720 },
+        width: { ideal: 1920 }, // Alta resolução para ler de longe
+        height: { ideal: 1080 },
         focusMode: "continuous"
       } 
     })
     .then(stream => {
       video.srcObject = stream;
-      iniciarMotorOCR();
+      iniciarMotores();
     })
     .catch(err => {
-      dicaStatusEl.innerText = "❌ Erro na câmera. Permita o acesso no navegador.";
+      dicaStatusEl.innerText = "❌ Permita o acesso à câmera.";
       dicaStatusEl.style.color = "#ff5252";
     });
 
-    // 4. Inicializar Motor OCR (Tesseract)
-    async function iniciarMotorOCR() {
-      dicaStatusEl.innerText = "⚡ Carregando inteligência artificial...";
-      workerOCR = await Tesseract.createWorker('eng');
+    async function iniciarMotores() {
+      dicaStatusEl.innerText = "⚡ Carregando IA...";
       
-      // Restringe exclusivamente para números (0-9)
+      // 1. Barcode Reader (ZXing)
+      barcodeReader = new ZXing.BrowserMultiFormatReader();
+
+      // 2. OCR (Tesseract)
+      workerOCR = await Tesseract.createWorker('eng');
       await workerOCR.setParameters({
         tessedit_char_whitelist: '0123456789',
       });
 
-      dicaStatusEl.innerText = "🟢 Câmera Pronta! Centralize os 18 números na mira azul.";
+      dicaStatusEl.innerText = "🟢 Enquadre a etiqueta no visor";
       dicaStatusEl.style.color = "#00e676";
       ocrAtivo = true;
 
-      // Inicia o Loop Assíncrono (Nunca trava a memória)
-      loopLeituraOCR();
+      loopLeituraHibrida();
     }
 
-    // 5. Loop Inteligente de Leitura
-    async function loopLeituraOCR() {
+    // LOOP HÍBRIDO (Tenta ler Código de Barras SSCC de longe + OCR de perto)
+    async function loopLeituraHibrida() {
       if (!ocrAtivo || processandoHU) {
-        setTimeout(loopLeituraOCR, 500);
+        setTimeout(loopLeituraHibrida, 400);
         return;
       }
 
       try {
         miraBox.classList.add('lendo');
-        
-        // Recorta a área exata da mira (Top 30% a 70%, Left 5% a 95%)
+
+        // TENTATIVA 1: Ler de Longe via Barcode GS1-128 (SSCC)
+        try {
+          const barcodeResult = await barcodeReader.decodeFromVideoElement(video);
+          if (barcodeResult && barcodeResult.text) {
+            // Limpa o resultado do código de barras tirando (00) do GS1
+            const barcodeNum = barcodeResult.text.replace(/\D/g, '');
+            const matchBarcode = barcodeNum.match(/1789\d{14}/); // Reconhece padrão SSCC iniciado em 1789
+            
+            if (matchBarcode) {
+              const huBarcode = matchBarcode[0];
+              numerosLidosEl.innerText = huBarcode;
+              contadorDigitosEl.innerText = "18 / 18";
+              dicaStatusEl.innerText = "🎯 SSCC Lido (De Longe)!";
+              await verificarHU(huBarcode);
+              setTimeout(loopLeituraHibrida, 400);
+              return;
+            }
+          }
+        } catch(e) {
+          // Se não achou barcode no frame, segue para o OCR normalmente
+        }
+
+        // TENTATIVA 2: Ler via OCR de Perto
         const vw = video.videoWidth;
         const vh = video.videoHeight;
+        
         if (vw > 0 && vh > 0) {
           canvas.width = vw * 0.9;
-          canvas.height = vh * 0.4;
+          canvas.height = vh * 0.6;
           const ctx = canvas.getContext('2d');
           
-          // Captura o quadro
-          ctx.drawImage(video, vw * 0.05, vh * 0.30, vw * 0.9, vh * 0.4, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(video, vw * 0.05, vh * 0.20, vw * 0.9, vh * 0.6, 0, 0, canvas.width, canvas.height);
 
-          // TRATAMENTO DE IMAGEM: Aumentar Contraste / Escala de Cinza
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imgData.data;
-          for (let i = 0; i < data.length; i += 4) {
-            // Converte para cinza e aplica contraste severo
-            let avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
-            avg = avg < 130 ? 0 : 255; // Binarização (Preto e Branco puro)
-            data[i] = avg;     // R
-            data[i + 1] = avg; // G
-            data[i + 2] = avg; // B
-          }
-          ctx.putImageData(imgData, 0, 0);
-
-          // Executa OCR no corte otimizado
           const { data: { text } } = await workerOCR.recognize(canvas);
-          
-          // Extrai apenas sequências de números
           const textoLimpo = text.replace(/\D/g, '');
-          
-          // Busca a maior sequência de números encontrada no quadro
+
           if (textoLimpo.length > 0) {
-            numerosLidosEl.innerText = textoLimpo;
-            contadorDigitosEl.innerText = `${textoLimpo.length} / 18 dígitos`;
-            
-            if (textoLimpo.length === 18) {
-              numerosLidosEl.style.color = "#00e676";
-              dicaStatusEl.innerText = "🎯 18 Dígitos detectados! Validando no estoque...";
-              dicaStatusEl.style.color = "#00e676";
+            // Procura o padrão que começa com 1789 e tem 18 dígitos
+            const matchSSCC = textoLimpo.match(/1789\d{14}/);
+
+            if (matchSSCC) {
+              const huOCR = matchSSCC[0];
+              numerosLidosEl.innerText = huOCR;
+              contadorDigitosEl.innerText = "18 / 18";
+              dicaStatusEl.innerText = "🎯 Padrão 1789... Detectado!";
               miraBox.classList.remove('lendo');
               miraBox.classList.add('sucesso');
-              
-              await verificarHU(textoLimpo);
-            } else if (textoLimpo.length > 18) {
-              // Se capturou números a mais, tenta achar os 18 dentro da string
-              const match = textoLimpo.match(/\d{18}/);
-              if (match) {
-                numerosLidosEl.innerText = match[0];
-                contadorDigitosEl.innerText = "18 / 18 dígitos";
-                await verificarHU(match[0]);
-              } else {
-                numerosLidosEl.style.color = "#ff9800";
-                dicaStatusEl.innerText = "⚠️ Excesso de números. Aproxime a câmera da etiqueta.";
-                dicaStatusEl.style.color = "#ff9800";
-              }
+              await verificarHU(huOCR);
             } else {
-              numerosLidosEl.style.color = "#ffd700";
-              dicaStatusEl.innerText = `👁️ Lendo... Faltam ${18 - textoLimpo.length} dígitos para completar.`;
+              // Exibe os números parciais sendo formados
+              const exibeNum = textoLimpo.substring(0, 18);
+              numerosLidosEl.innerText = exibeNum;
+              contadorDigitosEl.innerText = `${exibeNum.length} / 18`;
+              dicaStatusEl.innerText = "👁️ Buscando padrão 1789...";
               dicaStatusEl.style.color = "#ffd700";
             }
           } else {
-            numerosLidosEl.innerText = "---";
-            contadorDigitosEl.innerText = "0 / 18 dígitos";
-            numerosLidosEl.style.color = "#666";
+            numerosLidosEl.innerText = "Aguardando...";
+            contadorDigitosEl.innerText = "0 / 18";
           }
         }
         miraBox.classList.remove('lendo');
       } catch (e) {
-        console.error("Erro no loop OCR:", e);
+        console.error(e);
       }
 
-      // Chama a próxima leitura instantaneamente após terminar essa (sem travar memória)
-      setTimeout(loopLeituraOCR, 200);
+      setTimeout(loopLeituraHibrida, 300);
     }
 
-    // 6. Validar no Google Sheets e Exibir Alerta
+    // Validar com o Sheets
     async function verificarHU(hu) {
       processandoHU = true;
       try {
@@ -273,36 +273,32 @@
             ping.style.display = 'none';
             resetarVisor();
             processandoHU = false;
-          }, 3500);
+          }, 3000);
 
         } else if (data.status === "ja_lido") {
-          dicaStatusEl.innerText = `⚠️ A HU ${hu} JÁ FOI REGISTRADA ANTES!`;
+          dicaStatusEl.innerText = `⚠️ HU ${hu} JÁ FOI LIDA!`;
           dicaStatusEl.style.color = "#ff9800";
-          numerosLidosEl.style.color = "#ff9800";
-          setTimeout(() => { resetarVisor(); processandoHU = false; }, 2500);
+          setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
         } else {
-          dicaStatusEl.innerText = `❌ HU ${hu} não encontrada na lista da planilha!`;
+          dicaStatusEl.innerText = `❌ HU ${hu} não está na lista!`;
           dicaStatusEl.style.color = "#ff5252";
-          numerosLidosEl.style.color = "#ff5252";
-          setTimeout(() => { resetarVisor(); processandoHU = false; }, 2500);
+          setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
         }
       } catch (e) {
-        dicaStatusEl.innerText = "❌ Erro de conexão com a planilha do Google.";
+        dicaStatusEl.innerText = "❌ Erro na resposta da Planilha.";
         dicaStatusEl.style.color = "#ff5252";
-        setTimeout(() => { resetarVisor(); processandoHU = false; }, 2500);
+        setTimeout(() => { resetarVisor(); processandoHU = false; }, 2000);
       }
     }
 
     function resetarVisor() {
       miraBox.classList.remove('sucesso');
-      numerosLidosEl.innerText = "Aguardando números...";
-      numerosLidosEl.style.color = "#00e676";
-      contadorDigitosEl.innerText = "0 / 18 dígitos";
-      dicaStatusEl.innerText = "🟢 Câmera Pronta! Centralize os 18 números na mira azul.";
+      numerosLidosEl.innerText = "Aguardando...";
+      contadorDigitosEl.innerText = "0 / 18";
+      dicaStatusEl.innerText = "🟢 Enquadre a etiqueta no visor";
       dicaStatusEl.style.color = "#00e676";
     }
 
-    // Sincroniza o painel com a planilha a cada 5 segundos
     atualizarDashboard();
     setInterval(atualizarDashboard, 5000);
   </script>
