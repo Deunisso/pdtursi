@@ -25,7 +25,7 @@ let workerOCR = null;
 let lanternaLigada = false;
 let listaPendentesGlobal = [];
 
-// Som de Bip ao confirmar
+// Som de Bip
 function tocarBip() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -59,7 +59,7 @@ async function alternarLanterna() {
   }
 }
 
-// Extrai números
+// Extrai estritamente números
 function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
@@ -131,27 +131,27 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização Direta da IA
+// Inicialização Tesseract Otimizada
 async function iniciarSistemaLeitura() {
-  dicaStatusEl.innerText = "⚡ Inicializando leitor '1789'...";
+  dicaStatusEl.innerText = "⚡ Inicializando IA...";
 
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
-    tessedit_char_whitelist: '0123456789', // Foco EXCLUSIVO em dígitos
-    tessedit_pageseg_mode: '6',           // Bloco único de linhas
+    tessedit_char_whitelist: '0123456789', // Apenas números
+    tessedit_pageseg_mode: '6',           // Trata como bloco de texto
   });
 
-  dicaStatusEl.innerText = "🟢 Alinhe o código 1789 na mira";
+  dicaStatusEl.innerText = "🟢 Alinhe os 18 dígitos do 1789 na mira";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopLeituraOCR();
 }
 
-// Loop Ultra Rápido focado em '1789 + 14 dígitos'
+// Loop de Leitura com Truncagem Focada
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
-    setTimeout(loopLeituraOCR, 50);
+    setTimeout(loopLeituraOCR, 80);
     return;
   }
 
@@ -162,11 +162,11 @@ async function loopLeituraOCR() {
     const vh = video.videoHeight;
     
     if (vw > 0 && vh > 0) {
-      // Recorte ajustado na região central
-      const CROP_W = vw * 0.85;  
-      const CROP_H = vh * 0.25;  
-      const CROP_X = vw * 0.02;  
-      const CROP_Y = vh * 0.18;  
+      // Recorte mais focado no meio (evita ler laterais)
+      const CROP_W = vw * 0.70;  
+      const CROP_H = vh * 0.20;  
+      const CROP_X = vw * 0.15;  
+      const CROP_Y = vh * 0.20;  
 
       const SCALE = 2.0;
       canvas.width = CROP_W * SCALE;
@@ -175,28 +175,27 @@ async function loopLeituraOCR() {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, CROP_W * SCALE, CROP_H * SCALE);
 
-      // FILTRO DE BARS/CONTRASTE (Aumenta a precisão ao ler na tela)
+      // Tratamento Suave em Grayscale (Sem estouro de contraste)
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imgData.data;
       for (let i = 0; i < data.length; i += 4) {
-        const v = (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const color = v < 120 ? 0 : 255;
-        data[i] = data[i+1] = data[i+2] = color;
+        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+        data[i] = data[i + 1] = data[i + 2] = avg; // Escala de cinza limpa
       }
       ctx.putImageData(imgData, 0, 0);
 
-      // Executa a leitura
+      // Leitura Tesseract
       const result = await workerOCR.recognize(canvas);
       const numerosPuros = extrairNumeros(result.data.text || "");
 
-      // BUSCA O PADRÃO: 1789 seguido de 14 números (Total 18)
+      // Procura o padrão 1789 com 18 dígitos no total
       const match = numerosPuros.match(/1789\d{14}/);
 
       if (match && !processandoHU) {
         const huEncontrada = match[0];
         processandoHU = true;
 
-        modoLeituraEl.innerText = "🔒 HU DETECTADA!";
+        modoLeituraEl.innerText = "🔒 HU CONFIRMADA!";
         spanNumsEstabilizados.innerText = huEncontrada;
         spanNumsAtivos.innerText = "";
         contadorDigitosEl.innerText = "18 / 18";
@@ -211,7 +210,6 @@ async function loopLeituraOCR() {
         return;
 
       } else {
-        // Exibição do progresso em tempo real
         const pos1789 = numerosPuros.indexOf('1789');
 
         if (pos1789 !== -1) {
@@ -223,7 +221,7 @@ async function loopLeituraOCR() {
           contadorDigitosEl.innerText = `${parcial.length} / 18`;
 
           modoLeituraEl.innerText = "LENDO DÍGITOS...";
-          dicaStatusEl.innerText = "👁️ Mantenha a câmera estável!";
+          dicaStatusEl.innerText = "👁️ Mantenha firme na linha do 1789!";
           dicaStatusEl.style.color = "#ffd700";
         } else {
           spanNumsEstabilizados.innerText = "";
@@ -231,7 +229,7 @@ async function loopLeituraOCR() {
           contadorDigitosEl.innerText = "0 / 18";
 
           modoLeituraEl.innerText = "AGUARDANDO CÓDIGO 1789...";
-          dicaStatusEl.innerText = "🟢 Alinhe o código 1789 na mira";
+          dicaStatusEl.innerText = "🟢 Alinhe o número 1789 na mira";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -242,11 +240,11 @@ async function loopLeituraOCR() {
   }
 
   if (!processandoHU) {
-    setTimeout(loopLeituraOCR, 50);
+    setTimeout(loopLeituraOCR, 80);
   }
 }
 
-// Envia para o Google Sheets
+// Comunicação com o Google Sheets
 async function verificarHU(huCompleta) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -293,7 +291,7 @@ function resetarVisor() {
   
   contadorDigitosEl.innerText = "0 / 18";
   modoLeituraEl.innerText = "AGUARDANDO CÓDIGO 1789...";
-  dicaStatusEl.innerText = "🟢 Alinhe o código 1789 na mira";
+  dicaStatusEl.innerText = "🟢 Alinhe o número 1789 na mira";
   dicaStatusEl.style.color = "#00e676";
   
   const ctx = canvas.getContext('2d');
