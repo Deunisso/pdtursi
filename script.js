@@ -41,7 +41,7 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Lanterna
+// Controle de Lanterna
 async function alternarLanterna() {
   const stream = video.srcObject;
   if (!stream) return;
@@ -58,8 +58,8 @@ async function alternarLanterna() {
   } catch(e) {}
 }
 
-// Limpa strings de HUs para comparação sem erro
-function normalizarHU(str) {
+// Função utilitária para extrair apenas números de uma HU
+function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
@@ -69,12 +69,16 @@ async function atualizarDashboard() {
     const res = await fetch(SCRIPT_URL);
     const data = await res.json();
     
-    // Atualiza os contadores do topo corrigindo qualquer bug numérico
+    // Atualiza contadores numéricos
     const qtdEncontradas = parseInt(data.encontradas || 0, 10);
     const qtdPendentes = parseInt(data.pendentes || 0, 10);
 
-    document.getElementById('qtd-encontradas').innerText = qtdEncontradas;
-    document.getElementById('qtd-faltam').innerText = qtdPendentes;
+    if (document.getElementById('qtd-encontradas')) {
+      document.getElementById('qtd-encontradas').innerText = qtdEncontradas;
+    }
+    if (document.getElementById('qtd-faltam')) {
+      document.getElementById('qtd-faltam').innerText = qtdPendentes;
+    }
 
     if (data.lista_pendentes && Array.isArray(data.lista_pendentes)) {
       renderizarListaPendentes(data.lista_pendentes);
@@ -84,10 +88,14 @@ async function atualizarDashboard() {
   }
 }
 
-// Renderiza APENAS os 5 últimos dígitos das HUs pendentes
+// Renderiza APENAS os 5 últimos dígitos nos chips da lista de pendentes
 function renderizarListaPendentes(lista) {
-  listaPendentesGlobal = lista.map(item => normalizarHU(item)).filter(item => item.length > 0);
-  badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
+  // Salva na memória global a HU original
+  listaPendentesGlobal = lista.map(item => extrairNumeros(item)).filter(item => item.length > 0);
+  
+  if (badgeContador) {
+    badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
+  }
 
   if (listaPendentesGlobal.length === 0) {
     containerListaHus.innerHTML = `
@@ -98,43 +106,52 @@ function renderizarListaPendentes(lista) {
     return;
   }
 
-  containerListaHus.innerHTML = listaPendentesGlobal.map(hu => {
-    // Garante que é uma HU de 18 dígitos e pega APENAS os últimos 5
-    const ultimos5 = hu.length >= 5 ? hu.slice(-5) : hu;
+  // Gera os quadros exibindo apenas os 5 últimos dígitos da HU completa
+  containerListaHus.innerHTML = listaPendentesGlobal.map(huCompleta => {
+    // Pega exatamente os últimos 5 dígitos (ex: de '178910240423291973' pega '91973')
+    const ultimos5 = huCompleta.length >= 5 ? huCompleta.slice(-5) : huCompleta;
 
     return `
-      <div class="hu-chip" data-hu="${hu}">
-        <span class="sufixo">…${ultimos5}</span>
+      <div class="hu-chip" data-hu="${huCompleta}">
+        <span>…${ultimos5}</span>
       </div>`;
   }).join('');
 }
 
-// Remove instantaneamente a HU da tela ao ser bipada
+// Remove instantaneamente o chip da tela quando a HU é lida
 function removerHuDaListaVisual(huEncontrada) {
-  const huLimpa = normalizarHU(huEncontrada);
-  
-  // Procura o elemento na tela usando o data-attribute ou os 5 últimos dígitos
+  const huLimpa = extrairNumeros(huEncontrada);
   const ultimos5 = huLimpa.slice(-5);
-  const chips = document.querySelectorAll('.hu-chip');
+  
+  const chips = containerListaHus.querySelectorAll('.hu-chip');
   
   chips.forEach(chip => {
-    const huDoChip = chip.getAttribute('data-hu');
-    if (huDoChip === huLimpa || (huDoChip && huDoChip.endsWith(ultimos5))) {
+    const huAtributo = chip.getAttribute('data-hu');
+    
+    // Compara a HU inteira de 18 dígitos OU o final de 5 dígitos
+    if (huAtributo === huLimpa || (huAtributo && huAtributo.endsWith(ultimos5))) {
       chip.classList.add('removendo');
       setTimeout(() => {
         chip.remove();
-        listaPendentesGlobal = listaPendentesGlobal.filter(item => item !== huDoChip);
-        badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
+        
+        // Atualiza a lista na memória
+        listaPendentesGlobal = listaPendentesGlobal.filter(item => item !== huAtributo && !item.endsWith(ultimos5));
+        
+        if (badgeContador) {
+          badgeContador.innerText = `${listaPendentesGlobal.length} RESTANTES`;
+        }
 
-        // Atualiza os contadores na hora
+        // Atualiza contadores do topo em tempo real
         const elFaltam = document.getElementById('qtd-faltam');
         const elEncontradas = document.getElementById('qtd-encontradas');
         
-        let faltam = parseInt(elFaltam.innerText || "0", 10);
-        let encontradas = parseInt(elEncontradas.innerText || "0", 10);
-        
-        if (faltam > 0) elFaltam.innerText = faltam - 1;
-        elEncontradas.innerText = encontradas + 1;
+        if (elFaltam && elEncontradas) {
+          let faltam = parseInt(elFaltam.innerText || "0", 10);
+          let encontradas = parseInt(elEncontradas.innerText || "0", 10);
+          
+          if (faltam > 0) elFaltam.innerText = faltam - 1;
+          elEncontradas.innerText = encontradas + 1;
+        }
 
         if (listaPendentesGlobal.length === 0) {
           renderizarListaPendentes([]);
@@ -161,9 +178,9 @@ navigator.mediaDevices.getUserMedia({
   dicaStatusEl.style.color = "#ff5252";
 });
 
-// Inicialização OCR
+// Inicialização Tesseract OCR
 async function iniciarOCR() {
-  dicaStatusEl.innerText = "⚡ Carregando leitor...";
+  dicaStatusEl.innerText = "⚡ Carregando leitor de código...";
   
   workerOCR = await Tesseract.createWorker('eng');
   await workerOCR.setParameters({
@@ -171,14 +188,14 @@ async function iniciarOCR() {
     tessedit_pageseg_mode: '6',
   });
 
-  dicaStatusEl.innerText = "🟢 Aponte para a HU (Início 1789...)";
+  dicaStatusEl.innerText = "🟢 Aponte para a HU (18 DÍGITOS - 1789...)";
   dicaStatusEl.style.color = "#00e676";
   ocrAtivo = true;
 
   loopOCR();
 }
 
-// Filtro P&B de alto contraste
+// Processamento de imagem em P&B para leitura rápida
 function aplicarBinarizacaoOtsu(ctx, width, height) {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
@@ -221,7 +238,7 @@ function aplicarBinarizacaoOtsu(ctx, width, height) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-// Loop Principal de Leitura da Câmera
+// Loop de Leitura da Câmera (PROCURA OS 18 CARACTERES)
 async function loopOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopOCR, 150);
@@ -249,8 +266,7 @@ async function loopOCR() {
       const rawText = result.data.text || "";
       const textoLimpo = rawText.replace(/[^\d]/g, '');
 
-      // REGEX Rigoroso: EXIGE que comece exatamente com 1789 e tenha 18 DÍGITOS no total
-      // Isso ignora códigos de material de 6, 8, 10 ou 12 dígitos.
+      // PROCURA OBRIGATORIAMENTE O CÓDIGO DE 18 DÍGITOS COMEÇANDO COM 1789
       const REGEX_HU_18 = /1789\d{14}/;
       const match = textoLimpo.match(REGEX_HU_18);
 
@@ -259,8 +275,8 @@ async function loopOCR() {
       if (huEncontrada) {
         numerosLidosEl.innerText = huEncontrada;
         contadorDigitosEl.innerText = "18 / 18";
-        modoLeituraEl.innerText = "🎯 HU VALIDA RECONHECIDA";
-        dicaStatusEl.innerText = "✓ Confirmando HU na lista...";
+        modoLeituraEl.innerText = "🎯 HU 18 DÍGITOS RECONHECIDA";
+        dicaStatusEl.innerText = "✓ Validando HU...";
         dicaStatusEl.style.color = "#00e676";
         
         miraBox.classList.remove('lendo');
@@ -279,7 +295,7 @@ async function loopOCR() {
         } else {
           numerosLidosEl.innerText = "Aguardando 1789...";
           contadorDigitosEl.innerText = "0 / 18";
-          dicaStatusEl.innerText = "🟢 Aponte para o código HU (18 dígitos)";
+          dicaStatusEl.innerText = "🟢 Enquadre a HU de 18 dígitos";
           dicaStatusEl.style.color = "#00e676";
         }
       }
@@ -292,43 +308,43 @@ async function loopOCR() {
   setTimeout(loopOCR, 150);
 }
 
-// Valida a HU lida no Google Sheets
-async function verificarHU(hu) {
+// Envia a HU inteira (18 dígitos) para a planilha
+async function verificarHU(huCompleta) {
   processandoHU = true;
   try {
     const res = await fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({ hu: hu })
+      body: JSON.stringify({ hu: huCompleta })
     });
     const data = await res.json();
 
     if (data.status === "sucesso") {
       tocarBip();
       
-      // Notificação e remoção visual instantânea
-      const ultimos5 = hu.slice(-5);
-      huNotificacaoTexto.innerText = `...${ultimos5} (${hu})`;
+      const ultimos5 = huCompleta.slice(-5);
+      huNotificacaoTexto.innerText = `HU: ...${ultimos5}`;
       notificacaoEl.style.display = 'block';
       
-      removerHuDaListaVisual(hu);
+      // Remove da lista de pendentes e atualiza os cards de topo
+      removerHuDaListaVisual(huCompleta);
 
       setTimeout(() => {
         notificacaoEl.style.display = 'none';
         resetarVisor();
         processandoHU = false;
-      }, 2000);
+      }, 1800);
 
     } else if (data.status === "ja_lido") {
-      dicaStatusEl.innerText = `⚠️ HU ${hu.slice(-5)} já foi lida!`;
+      dicaStatusEl.innerText = `⚠️ HU ${huCompleta.slice(-5)} já foi bipada!`;
       dicaStatusEl.style.color = "#ff9800";
       setTimeout(() => { resetarVisor(); processandoHU = false; }, 1800);
     } else {
-      dicaStatusEl.innerText = `❌ HU ${hu.slice(-5)} não está na lista!`;
+      dicaStatusEl.innerText = `❌ HU ${huCompleta.slice(-5)} não está na lista!`;
       dicaStatusEl.style.color = "#ff5252";
       setTimeout(() => { resetarVisor(); processandoHU = false; }, 1800);
     }
   } catch (e) {
-    dicaStatusEl.innerText = "❌ Erro ao conectar com o servidor.";
+    dicaStatusEl.innerText = "❌ Erro ao comunicar com a Planilha.";
     dicaStatusEl.style.color = "#ff5252";
     setTimeout(() => { resetarVisor(); processandoHU = false; }, 1800);
   }
@@ -343,6 +359,6 @@ function resetarVisor() {
   dicaStatusEl.style.color = "#00e676";
 }
 
-// Inicialização
+// Chamadas iniciais
 atualizarDashboard();
-setInterval(atualizarDashboard, 4000);
+setInterval(atualizarDashboard, 5000);
