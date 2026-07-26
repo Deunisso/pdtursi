@@ -5,7 +5,6 @@ let listaHUs = [];
 let html5QrCode;
 let aguardandoProcessamento = false;
 
-// Limpa caracteres especiais deixando apenas os números
 function limparCodigoHU(textoRaw) {
   return String(textoRaw).replace(/[^\d]/g, '').trim();
 }
@@ -14,19 +13,12 @@ async function iniciarAplicacao() {
   const overlay = document.getElementById('overlay-inicio');
   if (overlay) overlay.style.display = 'none';
 
-  if (typeof Html5Qrcode === 'undefined') {
-    exibirPainelInferior("❌ ERRO DE CARREGAMENTO", "BIBLIOTECA INDISPONÍVEL", "Recarregue a página.", "alerta");
-    return;
-  }
-
   await carregarDadosSilenciosamente();
-  iniciarCamera();
+  iniciarCameraHD();
 
-  // Sincroniza a cada 10 segundos
   setInterval(carregarDadosSilenciosamente, 10000);
 }
 
-// Busca a lista na Planilha do Google
 async function carregarDadosSilenciosamente() {
   if (aguardandoProcessamento) return;
   const dot = document.getElementById('sync-dot');
@@ -53,7 +45,6 @@ async function carregarDadosSilenciosamente() {
 
 function atualizarContadores() {
   if (!Array.isArray(listaHUs)) return;
-
   const total = listaHUs.length;
   const encontrados = listaHUs.filter(item => item.encontrado).length;
   const restantes = total - encontrados;
@@ -83,20 +74,14 @@ function exibirPainelInferior(titulo, codigo, detalhes, tipo = 'sucesso') {
   }
 }
 
-// 🎯 LEITURA RÁPIDA FOCADA NO CÓDIGO DE BARRAS
 async function onScanSuccess(decodedText) {
   if (aguardandoProcessamento) return;
 
   const codigoLido = limparCodigoHU(decodedText);
+  if (codigoLido.length < 5) return;
 
-  // Ignora leituras acidentais muito curtas
-  if (codigoLido.length < 6) return;
-
-  // Busca na lista da planilha
   const itemExistente = listaHUs.find(i => {
     const huPlanilha = limparCodigoHU(String(i.hu));
-    
-    // Compara o código lido com o cadastrado (seja completo ou final da HU)
     return huPlanilha === codigoLido || 
            codigoLido.endsWith(huPlanilha) || 
            huPlanilha.endsWith(codigoLido);
@@ -104,26 +89,22 @@ async function onScanSuccess(decodedText) {
 
   if (navigator.vibrate) navigator.vibrate(100);
 
-  // NÃO ENCONTRADO
   if (!itemExistente) {
-    exibirPainelInferior("⚠️ NÃO ENCONTRADO", codigoLido, "Código fora da lista de conferência", "alerta");
+    exibirPainelInferior("⚠️ NÃO ENCONTRADO", codigoLido, "Código fora da lista", "alerta");
     return;
   }
 
-  // JÁ BIPADO
   if (itemExistente.encontrado) {
     exibirPainelInferior("⚠️ JÁ BIPADA", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "alerta");
     return;
   }
 
-  // BIP COM SUCESSO
   aguardandoProcessamento = true;
   itemExistente.encontrado = true;
   
   atualizarContadores();
   exibirPainelInferior("⚡ HU BIPADA!", itemExistente.hu, `Bin: ${itemExistente.posicao} | Mat: ${itemExistente.material}`, "sucesso");
 
-  // Envia baixa para o Google Sheets
   try {
     const urlBip = `${APPS_SCRIPT_URL}?action=bipar&hu=${encodeURIComponent(itemExistente.hu)}`;
     await fetch(urlBip);
@@ -134,8 +115,8 @@ async function onScanSuccess(decodedText) {
   }
 }
 
-// 📷 INICIALIZAÇÃO SIMPLES E ESTÁVEL DA CÂMERA
-async function iniciarCamera() {
+// 📷 CÂMERA TURBINADA (Sem restrição de enquadramento + Foco total)
+async function iniciarCameraHD() {
   try {
     if (html5QrCode) {
       try { await html5QrCode.stop(); } catch(e){}
@@ -144,33 +125,28 @@ async function iniciarCamera() {
     html5QrCode = new Html5Qrcode("reader");
 
     const config = { 
-      fps: 15,
-      qrbox: { width: 300, height: 120 }
+      fps: 25,
+      // Sem 'qrbox' = Lê a tela inteira sem cortar o código de barras
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true // Ativa motor nativo de IA do Android/Chrome
+      }
     };
 
-    // Abre a câmera traseira padrão do navegador de forma nativa
-    await html5QrCode.start(
-      { facingMode: "environment" }, 
-      config, 
-      onScanSuccess, 
-      () => {}
-    );
+    // Solicita alta resolução para a câmera conseguir ver barras muito finas
+    const cameraConfig = {
+      facingMode: "environment",
+      width: { min: 1280, ideal: 1920 },
+      height: { min: 720, ideal: 1080 }
+    };
+
+    await html5QrCode.start(cameraConfig, config, onScanSuccess, () => {});
 
   } catch (err) {
-    console.warn("Abertura direta falhou, buscando dispositivos...", err);
+    console.warn("Modo HD falhou, iniciando em modo simples...", err);
     try {
-      const devices = await Html5Qrcode.getCameras();
-      if (devices && devices.length > 0) {
-        const cameraId = devices[devices.length - 1].id;
-        await html5QrCode.start(
-          cameraId, 
-          { fps: 15, qrbox: { width: 280, height: 100 } }, 
-          onScanSuccess, 
-          () => {}
-        );
-      }
-    } catch (errFallback) {
-      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Permita o uso da câmera no navegador.", "alerta");
+      await html5QrCode.start({ facingMode: "environment" }, { fps: 15 }, onScanSuccess, () => {});
+    } catch (e) {
+      exibirPainelInferior("❌ ERRO DE CÂMERA", "SEM ACESSO", "Verifique as permissões da câmera.", "alerta");
     }
   }
 }
