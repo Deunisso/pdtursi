@@ -85,7 +85,7 @@ video {
 /* 🔻 PAINEL DE HUS PENDENTES (FLUTUANDO NA PARTE INFERIOR CENTRO) */
 #painel-pendentes {
   position: absolute;
-  bottom: 100px; /* Mapeado para o rodapé */
+  bottom: 60px; /* Mapeado para o rodapé */
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
