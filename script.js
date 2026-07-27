@@ -16,7 +16,6 @@ function inicializarAudio() {
   }
 }
 
-// 🔊 BIP INSTANTÂNEO (SEM DELAY)
 function tocarBipInstantaneo() {
   try {
     inicializarAudio();
@@ -84,7 +83,7 @@ function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// 🔄 BUSCA DADOS NA PLANILHA
+// 🔄 SINCRONIZAÇÃO EM TEMPO REAL
 async function carregarDadosPlanilha() {
   try {
     const res = await fetch(`${SCRIPT_URL}?t=${Date.now()}`);
@@ -101,7 +100,7 @@ async function carregarDadosPlanilha() {
       if (data.lista_pendentes && data.lista_pendentes.length > 0) {
         containerListaHus.innerHTML = data.lista_pendentes
           .map(hu => {
-            const ultimos5 = String(hu).slice(-5); // APENAS OS 5 ÚLTIMOS DÍGITOS
+            const ultimos5 = String(hu).slice(-5); // Exibe apenas os 5 últimos dígitos
             return `<div class="hu-chip" title="${hu}">...${ultimos5}</div>`;
           })
           .join('');
@@ -199,7 +198,7 @@ async function loopLeituraOCR() {
 
             if (matchBarra && !processandoHU) {
               processandoHU = true;
-              tocarBipInstantaneo(); // ⚡ BIP NA HORA!
+              tocarBipInstantaneo();
 
               novosElementos.push({
                 bbox: {
@@ -236,7 +235,7 @@ async function loopLeituraOCR() {
 
       if (matchSSCC && !processandoHU) {
         processandoHU = true;
-        tocarBipInstantaneo(); // ⚡ BIP NA HORA!
+        tocarBipInstantaneo();
 
         const huEncontrada = extrairNumeros(matchSSCC.text).match(/1789\d{14}/)[0];
 
