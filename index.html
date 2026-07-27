@@ -15,20 +15,10 @@
       <video id="webcam" autoplay playsinline muted></video>
       <canvas id="canvas-processamento"></canvas>
 
-      <!-- Esquerda: Status -->
+      <!-- Topo Esquerda: Status -->
       <div id="modo-leitura" class="status-escaneando">ESCANEANDO...</div>
 
-      <!-- Centro Superior: HUs Pendentes (Fica Perfeitamente Visível) -->
-      <div id="painel-pendentes">
-        <div class="pendentes-header">
-          <span>⌛ HUS PENDENTES (DESLIZE ➔)</span>
-        </div>
-        <div id="container-lista-hus" class="lista-hus">
-          <div class="hu-chip">Buscando...</div>
-        </div>
-      </div>
-
-      <!-- Direita: Contador -->
+      <!-- Topo Direita: Contador -->
       <div class="contador-box">
         <span id="contador-digitos">0 RESTANTES</span>
       </div>
@@ -37,6 +27,16 @@
       <div id="log-terminal" class="terminal-box oculto">
         <div class="terminal-header">STATUS DA CONEXÃO</div>
         <div id="log-mensagens" class="terminal-body"></div>
+      </div>
+
+      <!-- 🔻 PAINEL DE HUS PENDENTES (EMBAIXO) -->
+      <div id="painel-pendentes">
+        <div class="pendentes-header">
+          <span>⌛ HUS PENDENTES (DESLIZE ➔)</span>
+        </div>
+        <div id="container-lista-hus" class="lista-hus">
+          <div class="hu-chip">Buscando...</div>
+        </div>
       </div>
 
     </div>
