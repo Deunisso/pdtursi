@@ -3,6 +3,7 @@
   margin: 0;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  user-select: none;
 }
 
 html, body {
@@ -13,7 +14,6 @@ html, body {
   color: #fff;
 }
 
-/* Container Principal estruturado com Flexbox */
 .app-container {
   display: flex;
   flex-direction: column;
@@ -22,19 +22,18 @@ html, body {
   background: #000;
 }
 
-/* 📷 ÁREA DA CÂMERA COM MOLDURA PRETA LARGA */
+/* 🔴 CÂMERA COM BORDA VERMELHA E ALTURA AJUSTADA PARA A TELA HORIZONTAL */
 #video-container {
   position: relative;
-  flex: 1; /* Ocupa o topo até encontrar o painel inferior */
-  margin: 8px; /* Afastamento das bordas da tela */
+  height: calc(100vh - 75px); /* Reservamos 75px para o painel inferior sempre aparecer */
+  margin: 6px;
   background: #000;
   
-  /* BORDA PRETA LARGA E DESTACADA */
-  border: 14px solid #111116;
-  border-radius: 16px;
-  outline: 2px solid #00d2ff; /* Linha de contorno neon */
+  /* Borda Vermelha Destacada */
+  border: 4px solid #ff1744;
+  border-radius: 12px;
+  box-shadow: 0 0 15px rgba(255, 23, 68, 0.4);
   overflow: hidden;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
 }
 
 video {
@@ -44,7 +43,7 @@ video {
   display: block;
 }
 
-/* STATUS TOP-ESQUERDO ("ESCANEANDO...") */
+/* STATUS TOP-ESQUERDO */
 .status-escaneando {
   position: absolute;
   top: 8px;
@@ -53,14 +52,13 @@ video {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #00e676;
   border-radius: 20px;
   color: #00e676;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 1px;
   backdrop-filter: blur(4px);
 }
 
@@ -73,33 +71,33 @@ video {
   box-shadow: 0 0 6px #00e676;
 }
 
-/* CONTADOR TOP-DIREITO ("RESTANTES") */
+/* CONTADOR TOP-DIREITO */
 .contador-box {
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 50;
-  padding: 6px 12px;
+  padding: 5px 10px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #ffd700;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #ffd700;
   font-size: 11px;
   font-weight: 900;
   backdrop-filter: blur(4px);
 }
 
-/* LOGS (EXIBIDO APENAS SE DER ERRO) */
+/* LOGS APENAS EM ERROS */
 .terminal-box {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 60;
-  width: 85%;
-  max-width: 380px;
+  width: 80%;
+  max-width: 350px;
   background: rgba(10, 10, 15, 0.95);
-  border: 1px solid #ff5252;
+  border: 1px solid #ff1744;
   border-radius: 8px;
   padding: 8px;
   font-family: monospace;
@@ -107,16 +105,16 @@ video {
 
 .terminal-header {
   font-size: 10px;
-  color: #ff5252;
+  color: #ff1744;
   font-weight: bold;
-  border-bottom: 1px solid rgba(255, 82, 82, 0.3);
+  border-bottom: 1px solid rgba(255, 23, 68, 0.3);
   padding-bottom: 4px;
   margin-bottom: 4px;
 }
 
 .terminal-body {
-  font-size: 11px;
-  max-height: 80px;
+  font-size: 10px;
+  max-height: 70px;
   overflow-y: auto;
 }
 
@@ -124,46 +122,59 @@ video {
   display: none !important;
 }
 
-/* 🔻 PAINEL DE HUS PENDENTES (TOTALMENTE VISÍVEL NA PARTE INFERIOR) */
+/* 🔻 PAINEL DE HUS PENDENTES (CARDS ARRASTÁVEIS FIOS NA BASE) */
 #painel-pendentes {
+  height: 65px;
   width: 100%;
-  height: 65px; /* Altura fixa reservada exclusivamente para as HUs */
-  background: #0d0d14;
-  border-top: 2px solid #00d2ff;
-  padding: 6px 12px;
+  background: #0d0d12;
+  border-top: 2px solid #ff1744;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 4px;
-  flex-shrink: 0; /* Impede a câmera de encolher este painel */
   z-index: 100;
 }
 
 .pendentes-header {
   font-size: 10px;
   font-weight: 800;
-  color: #ff5252;
+  color: #ff1744;
   letter-spacing: 1px;
 }
 
+/* Container Deslizável (Arrastável) */
 .lista-hus {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   white-space: nowrap;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* Arraste suave no celular */
+  padding-bottom: 2px;
 }
 
-/* Chip exibindo os 5 últimos dígitos */
+/* Scrollbar discreta para PC */
+.lista-hus::-webkit-scrollbar {
+  height: 4px;
+}
+.lista-hus::-webkit-scrollbar-thumb {
+  background: #ff1744;
+  border-radius: 4px;
+}
+
+/* Cards com 5 dígitos */
 .hu-chip {
-  background: #181826;
-  border: 1px solid #00d2ff;
+  background: #1a1a24;
+  border: 1px solid #ff1744;
   color: #ffd700;
   font-family: monospace;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: bold;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 6px;
-  display: inline-block;
+  flex-shrink: 0; /* Impede os cards de encolherem */
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
 }
 
 #canvas-processamento {
