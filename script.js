@@ -1,5 +1,5 @@
 // =================================================================
-// ⚠️ ATENÇÃO: Cole a URL da Nova Implantação do seu Apps Script aqui
+// CONFIGURAÇÃO: URL do Google Apps Script
 // =================================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
@@ -8,6 +8,7 @@ const video = document.getElementById('webcam');
 const modoLeituraEl = document.getElementById('modo-leitura');
 const contadorDigitosEl = document.getElementById('contador-digitos');
 const containerListaHus = document.getElementById('container-lista-hus');
+const logTerminalEl = document.getElementById('log-terminal');
 const logMensagensEl = document.getElementById('log-mensagens');
 const canvas = document.getElementById('canvas-processamento');
 
@@ -30,15 +31,27 @@ let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
 let detectorBarra = null;
+let intervalSincronizacao = null;
 
-// Terminal de logs central
+// Exibe logs apenas quando necessário (exibe painel se for Erro, oculta se for Sucesso)
 function logTerminal(mensagem, tipo = 'info') {
   if (!logMensagensEl) return;
+  
+  if (tipo === 'error') {
+    if (logTerminalEl) logTerminalEl.classList.remove('oculto');
+  }
+
   const div = document.createElement('div');
   div.className = `log-${tipo}`;
   div.innerText = `[${new Date().toLocaleTimeString()}] ${mensagem}`;
   logMensagensEl.appendChild(div);
   logMensagensEl.scrollTop = logMensagensEl.scrollHeight;
+}
+
+function ocultarTerminalLog() {
+  if (logTerminalEl) {
+    logTerminalEl.classList.add('oculto');
+  }
 }
 
 function extrairNumeros(str) {
@@ -62,44 +75,58 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// 🔄 BUSCA HUS PENDENTES DA PLANILHA NO INÍCIO
+// 🔄 BUSCA E SINCRONIZA DADOS DA PLANILHA (Sempre atualizado)
 async function carregarDadosPlanilha() {
-  logTerminal("Conectando à planilha...", "warn");
   try {
     const res = await fetch(SCRIPT_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    
     const data = await res.json();
     
-    logTerminal(`Conectado! ${data.pendentes} HUs pendentes.`, "info");
-    
+    // Sucesso na conexão: Esconde o log se estivesse aberto por erro anterior
+    ocultarTerminalLog();
+
+    // Atualiza o contador
     if (contadorDigitosEl) {
       contadorDigitosEl.innerText = `${data.pendentes} RESTANTES`;
     }
 
+    // Exibe apenas os 5 ÚLTIMOS DÍGITOS de cada HU
     if (containerListaHus) {
       if (data.lista_pendentes && data.lista_pendentes.length > 0) {
         containerListaHus.innerHTML = data.lista_pendentes
-          .map(hu => `<div class="hu-chip" id="chip-${hu}">${hu}</div>`)
+          .map(hu => {
+            const ultimos5 = hu.slice(-5); // Pega os 5 últimos dígitos
+            return `<div class="hu-chip" title="${hu}">...${ultimos5}</div>`;
+          })
           .join('');
       } else {
-        containerListaHus.innerHTML = `<div class="hu-chip" style="color:#00e676;">TODAS LIDAS!</div>`;
+        containerListaHus.innerHTML = `<div class="hu-chip" style="color:#00e676;">0 PENDENTES</div>`;
       }
     }
   } catch (err) {
-    logTerminal(`Erro ao ler planilha: ${err.message}`, "error");
+    logTerminal(`Falha na sincronização: ${err.message}`, "error");
   }
 }
 
-// Inicializa a câmera e carrega dados
+// Inicia a Câmera e dispara o Loop de Sincronização
 navigator.mediaDevices.getUserMedia({ 
   video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
 .then(stream => {
   video.srcObject = stream;
+  
+  // Primeira carga dos dados
   carregarDadosPlanilha();
+  
+  // ⏱️ Sincronização contínua a cada 5 segundos
+  if (intervalSincronizacao) clearInterval(intervalSincronizacao);
+  intervalSincronizacao = setInterval(carregarDadosPlanilha, 5000);
+
   iniciarSistemaLeitura();
   requestAnimationFrame(renderizarHUDLoop);
 })
-.catch(err => logTerminal("Erro na Câmera: " + err.message, "error"));
+.catch(err => logTerminal("Erro ao abrir Câmera: " + err.message, "error"));
 
 async function iniciarSistemaLeitura() {
   if ('BarcodeDetector' in window) {
@@ -232,10 +259,8 @@ async function loopLeituraOCR() {
   }
 }
 
-// 📤 ENVIO E ATUALIZAÇÃO DA PLANILHA
+// Envio da HU lida
 async function enviarParaAppsScript(huCompleta) {
-  logTerminal(`Enviando HU: ${huCompleta}...`, 'warn');
-
   try {
     const res = await fetch(SCRIPT_URL, {
       method: 'POST',
@@ -244,22 +269,16 @@ async function enviarParaAppsScript(huCompleta) {
     
     const resposta = await res.json();
 
-    if (resposta.status === 'sucesso') {
-      logTerminal(`✅ HU ${huCompleta} salva na planilha!`, 'info');
+    if (resposta.status === 'sucesso' || resposta.status === 'ja_lido') {
       tocarBip();
-      carregarDadosPlanilha(); // Atualiza lista e contador automaticamente
-    } else if (resposta.status === 'ja_lido') {
-      logTerminal(`⚠️ HU ${huCompleta} já havia sido lida.`, 'warn');
-      tocarBip();
+      await carregarDadosPlanilha(); // Atualiza a lista imediatamente
     } else if (resposta.status === 'nao_encontrado') {
-      logTerminal(`❌ HU ${huCompleta} não está na lista!`, 'error');
-    } else {
-      logTerminal(`Erro retornado: ${JSON.stringify(resposta)}`, 'error');
+      logTerminal(`HU ${huCompleta.slice(-5)} não encontrada na lista!`, 'error');
     }
   } catch (e) {
-    logTerminal(`Falha no envio POST: ${e.message}`, 'error');
+    logTerminal(`Erro ao enviar: ${e.message}`, 'error');
   } finally {
-    setTimeout(resetarVisor, 1500);
+    setTimeout(resetarVisor, 1200);
   }
 }
 
