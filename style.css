@@ -82,14 +82,42 @@ video {
   backdrop-filter: blur(4px);
 }
 
-/* 🔻 PAINEL DE HUS PENDENTES (FLUTUANDO NA PARTE INFERIOR CENTRO) */
+/* 🌟 POPUP CENTRAL DE ANIMAÇÃO DO NÚMERO LIDO */
+.popup-hu-centro {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  z-index: 90;
+  background: rgba(0, 230, 118, 0.95);
+  color: #000;
+  border: 3px solid #ffffff;
+  border-radius: 14px;
+  padding: 12px 24px;
+  font-family: monospace;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  box-shadow: 0 0 30px rgba(0, 230, 118, 0.8);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.25s ease;
+}
+
+/* Classe ativada no JS para acionar a animação */
+.popup-hu-centro.ativo {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* 🔻 PAINEL DE HUS PENDENTES (EMBAIXO) */
 #painel-pendentes {
   position: absolute;
-  bottom: 60px; /* Mapeado para o rodapé */
+  bottom: 60px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
-  width: calc(100% - 240px); /* Garante que não invada os cantos */
+  width: calc(100% - 240px);
   max-width: 450px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #00d2ff;
@@ -128,7 +156,6 @@ video {
   background: #00d2ff;
 }
 
-/* Cards sem os "..." */
 .hu-chip {
   background: rgba(20, 20, 30, 0.95);
   border: 1px solid #ffd700;
