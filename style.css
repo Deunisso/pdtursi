@@ -217,3 +217,18 @@ video {
 #canvas-processamento {
   display: none !important;
 }
+
+/* ⚠️ ANIMAÇÃO DE ERRO / NÃO ENCONTRADO (PISCA VERMELHO) */
+.popup-hu-centro.erro {
+  background: rgba(255, 23, 68, 0.95) !important;
+  color: #fff !important;
+  border-color: #ffffff !important;
+  box-shadow: 0 0 30px rgba(255, 23, 68, 0.9) !important;
+  animation: piscarVermelho 0.15s infinite alternate;
+}
+
+@keyframes piscarVermelho {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  to { opacity: 0.6; transform: translate(-50%, -50%) scale(0.95); }
+}
+
