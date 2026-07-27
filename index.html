@@ -5,44 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>PDTursi - Scanner WMS</title>
   
-  <!-- Biblioteca Tesseract para OCR -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <div class="app-container">
-    <!-- Câmera -->
+    <!-- Câmera com Borda -->
     <div id="video-container">
       <video id="webcam" autoplay playsinline muted></video>
       <canvas id="canvas-processamento"></canvas>
-    </div>
 
-    <!-- Canto Superior Esquerdo -->
-    <div id="modo-leitura" class="status-escaneando">ESCANEANDO...</div>
+      <!-- Status Top-Esquerdo -->
+      <div id="modo-leitura" class="status-escaneando">ESCANEANDO...</div>
 
-    <!-- Canto Superior Direito -->
-    <div class="contador-box">
-      <span id="contador-digitos">0 RESTANTES</span>
-    </div>
+      <!-- Status Top-Direito -->
+      <div class="contador-box">
+        <span id="contador-digitos">0 RESTANTES</span>
+      </div>
 
-    <!-- 🎯 MEIO DA TELA: TERMINAL DE LOGS DE CONEXÃO -->
-    <div id="log-terminal" class="terminal-box">
-      <div class="terminal-header">STATUS DA CONEXÃO APPS SCRIPT</div>
-      <div id="log-mensagens" class="terminal-body">
-        <div>🟢 Sistema iniciado. Aguardando leitura...</div>
+      <!-- Log Terminal (Inicia oculto) -->
+      <div id="log-terminal" class="terminal-box oculto">
+        <div class="terminal-header">STATUS DA CONEXÃO</div>
+        <div id="log-mensagens" class="terminal-body"></div>
       </div>
     </div>
 
-    <!-- 🔻 PARTE INFERIOR: PAINEL DE HUS PENDENTES (VISÍVEL DENTRO DA TELA) -->
+    <!-- 🔻 PAINEL INFERIOR: HUs PENDENTES (SEMPRE VISÍVEL) -->
     <div id="painel-pendentes">
       <div class="pendentes-header">
         <span>⌛ HUS PENDENTES</span>
       </div>
       <div id="container-lista-hus" class="lista-hus">
-        <div class="hu-chip">178910240423291973</div>
-        <div class="hu-chip">178910240423291974</div>
+        <div class="hu-chip">Carregando...</div>
       </div>
     </div>
   </div>
