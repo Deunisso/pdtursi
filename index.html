@@ -11,7 +11,7 @@
 <body>
 
   <div class="app-container">
-    <!-- Câmera com Borda -->
+    <!-- Câmera dentro da Moldura Preta -->
     <div id="video-container">
       <video id="webcam" autoplay playsinline muted></video>
       <canvas id="canvas-processamento"></canvas>
@@ -24,20 +24,20 @@
         <span id="contador-digitos">0 RESTANTES</span>
       </div>
 
-      <!-- Log Terminal (Inicia oculto) -->
+      <!-- Log Terminal em caso de Erro -->
       <div id="log-terminal" class="terminal-box oculto">
         <div class="terminal-header">STATUS DA CONEXÃO</div>
         <div id="log-mensagens" class="terminal-body"></div>
       </div>
     </div>
 
-    <!-- 🔻 PAINEL INFERIOR: HUs PENDENTES (SEMPRE VISÍVEL) -->
+    <!-- 🔻 PAINEL DE HUS PENDENTES (ABAIXO DA MOLDURA PRETA) -->
     <div id="painel-pendentes">
       <div class="pendentes-header">
         <span>⌛ HUS PENDENTES</span>
       </div>
       <div id="container-lista-hus" class="lista-hus">
-        <div class="hu-chip">Carregando...</div>
+        <div class="hu-chip">Buscando HUs...</div>
       </div>
     </div>
   </div>
