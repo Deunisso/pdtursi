@@ -18,12 +18,11 @@ function inicializarAudio() {
   }
 }
 
+// 🔊 BIP DE LEITURA (Agudo)
 function tocarBipInstantaneo() {
   try {
     inicializarAudio();
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
-    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     
@@ -39,6 +38,28 @@ function tocarBipInstantaneo() {
     
     osc.start();
     osc.stop(audioCtx.currentTime + 0.12);
+  } catch(e) {}
+}
+
+// 🔊 BIP DE ERRO / NÃO ENCONTRADO (Grave)
+function tocarBipErro() {
+  try {
+    inicializarAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.25);
   } catch(e) {}
 }
 
@@ -120,16 +141,23 @@ function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// ✨ EXIBE O NÚMERO COMPLETO NO CENTRO
-function exibirAnimacaoCentral(codigoCompleto) {
+// ✨ EXIBE O CÓDIGO CENTRALIZADO (VERDE OU VERMELHO)
+function exibirAnimacaoCentral(codigoCompleto, tipo = 'sucesso') {
   if (!popupLeituraEl) return;
-  popupLeituraEl.innerText = codigoCompleto; // Exibe o número inteiro
+  popupLeituraEl.innerText = codigoCompleto;
+  
+  if (tipo === 'erro') {
+    popupLeituraEl.classList.add('erro');
+  } else {
+    popupLeituraEl.classList.remove('erro');
+  }
+  
   popupLeituraEl.classList.add('ativo');
 }
 
 function ocultarAnimacaoCentral() {
   if (popupLeituraEl) {
-    popupLeituraEl.classList.remove('ativo');
+    popupLeituraEl.classList.remove('ativo', 'erro');
   }
 }
 
@@ -216,11 +244,7 @@ async function loopLeituraOCR() {
             if (matchBarra && !processandoHU) {
               processandoHU = true;
               tocarBipInstantaneo();
-              soltarFogos(); // Comemoração de fogos!
-              exibirAnimacaoCentral(matchBarra[0]);
-
-              if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
-
+              exibirAnimacaoCentral(matchBarra[0], 'sucesso');
               await enviarParaAppsScript(matchBarra[0]);
               return;
             }
@@ -245,12 +269,9 @@ async function loopLeituraOCR() {
       if (matchSSCC && !processandoHU) {
         processandoHU = true;
         tocarBipInstantaneo();
-        soltarFogos(); // Comemoração de fogos!
 
         const huEncontrada = extrairNumeros(matchSSCC.text).match(/1789\d{14}/)[0];
-        exibirAnimacaoCentral(huEncontrada);
-
-        if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
+        exibirAnimacaoCentral(huEncontrada, 'sucesso');
 
         await enviarParaAppsScript(huEncontrada);
         return;
@@ -267,19 +288,39 @@ async function loopLeituraOCR() {
   }
 }
 
+// 🚀 ENVIO E VALIDAÇÃO COM RETORNO DO BANCO DE DADOS
 async function enviarParaAppsScript(huCompleta) {
+  let tempoExibicao = 800; // Tempo em ms antes de voltar a escanear
+
   try {
-    // Dispara o envio sem bloquear a interface de forma demorada
-    fetch(SCRIPT_URL, {
+    const res = await fetch(SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ hu: huCompleta })
-    }).then(() => carregarDadosPlanilha());
+    });
+
+    const data = await res.json();
+
+    // 🎯 SE ENCONTRADO NA PLANILHA: SOLTA FOGOS
+    if (data.status === 'sucesso' || data.encontrado === true) {
+      soltarFogos(); 
+      if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
+      await carregarDadosPlanilha();
+    } else {
+      // ⚠️ SE NÃO ENCONTRADO NA PLANILHA: PISCA VERMELHO E BIPA GRAVE
+      tocarBipErro();
+      exibirAnimacaoCentral(huCompleta, 'erro');
+      if (modoLeituraEl) modoLeituraEl.innerText = "NÃO ENCONTRADO!";
+      tempoExibicao = 1200; // Mantém o alerta um pouco mais na tela
+    }
 
   } catch (e) {
-    logTerminal(`Erro ao enviar: ${e.message}`, 'error');
+    // ⚠️ ERRO DE REDE/CONEXÃO
+    tocarBipErro();
+    exibirAnimacaoCentral(huCompleta, 'erro');
+    logTerminal(`Erro na resposta: ${e.message}`, 'error');
+    tempoExibicao = 1200;
   } finally {
-    // 🚀 SAÍDA SUPER RÁPIDA: Reduzido para 1200ms para permitir escaneamento em massa!
-    setTimeout(resetarVisor, 3000);
+    setTimeout(resetarVisor, tempoExibicao);
   }
 }
 
