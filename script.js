@@ -279,7 +279,7 @@ async function enviarParaAppsScript(huCompleta) {
     logTerminal(`Erro ao enviar: ${e.message}`, 'error');
   } finally {
     // 🚀 SAÍDA SUPER RÁPIDA: Reduzido para 1200ms para permitir escaneamento em massa!
-    setTimeout(resetarVisor, 1200);
+    setTimeout(resetarVisor, 3000);
   }
 }
 
