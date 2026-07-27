@@ -11,31 +11,34 @@
 <body>
 
   <div class="app-container">
-    <!-- Câmera Borda Vermelha -->
     <div id="video-container">
       <video id="webcam" autoplay playsinline muted></video>
       <canvas id="canvas-processamento"></canvas>
 
+      <!-- Status Top-Esquerdo -->
       <div id="modo-leitura" class="status-escaneando">ESCANEANDO...</div>
 
+      <!-- Status Top-Direito -->
       <div class="contador-box">
         <span id="contador-digitos">0 RESTANTES</span>
       </div>
 
+      <!-- Log Terminal (Inicia oculto) -->
       <div id="log-terminal" class="terminal-box oculto">
         <div class="terminal-header">STATUS DA CONEXÃO</div>
         <div id="log-mensagens" class="terminal-body"></div>
       </div>
-    </div>
 
-    <!-- 🔻 PAINEL INFERIOR COM CARDS ARRASTÁVEIS -->
-    <div id="painel-pendentes">
-      <div class="pendentes-header">
-        <span>⌛ HUS PENDENTES (DESLIZE PARA O LADO ➔)</span>
+      <!-- 🔻 PAINEL DE HUS PENDENTES (FLUTUANDO DENTRO DA CÂMERA) -->
+      <div id="painel-pendentes">
+        <div class="pendentes-header">
+          <span>⌛ HUS PENDENTES (DESLIZE ➔)</span>
+        </div>
+        <div id="container-lista-hus" class="lista-hus">
+          <div class="hu-chip">Buscando HUs...</div>
+        </div>
       </div>
-      <div id="container-lista-hus" class="lista-hus">
-        <div class="hu-chip">Buscando HUs...</div>
-      </div>
+
     </div>
   </div>
 
