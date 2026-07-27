@@ -171,3 +171,9 @@ video {
 #canvas-processamento {
   display: none !important;
 }
+
+/* Classe para ocultar o terminal de logs quando a conexão estiver ok */
+.oculto {
+  display: none !important;
+}
+
