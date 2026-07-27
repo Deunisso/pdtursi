@@ -6,10 +6,9 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-Cgq
 // Elementos DOM
 const video = document.getElementById('webcam');
 const modoLeituraEl = document.getElementById('modo-leitura');
-const contadorDigitosEl = document.getElementById('contador-digitos');
 const canvas = document.getElementById('canvas-processamento');
+const logMensagensEl = document.getElementById('log-mensagens');
 
-// Overlay HD
 let canvasOverlay = document.getElementById('canvas-overlay');
 if (!canvasOverlay) {
   canvasOverlay = document.createElement('canvas');
@@ -29,6 +28,16 @@ let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
 let detectorBarra = null;
+
+// Função para exibir os Logs no Terminal Central
+function logTerminal(mensagem, tipo = 'info') {
+  if (!logMensagensEl) return;
+  const div = document.createElement('div');
+  div.className = `log-${tipo}`;
+  div.innerText = `[${new Date().toLocaleTimeString()}] ${mensagem}`;
+  logMensagensEl.appendChild(div);
+  logMensagensEl.scrollTop = logMensagensEl.scrollHeight;
+}
 
 function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
@@ -51,26 +60,23 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Inicia a câmera
+// Iniciar Câmera
 navigator.mediaDevices.getUserMedia({ 
-  video: { 
-    facingMode: "environment", 
-    width: { ideal: 1920 }, 
-    height: { ideal: 1080 } 
-  } 
+  video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
 .then(stream => {
   video.srcObject = stream;
   iniciarSistemaLeitura();
   requestAnimationFrame(renderizarHUDLoop);
-});
+})
+.catch(err => logTerminal("Erro ao abrir câmera: " + err.message, "error"));
 
 async function iniciarSistemaLeitura() {
+  logTerminal("Carregando OCR e Detectores...", "warn");
+  
   if ('BarcodeDetector' in window) {
     try {
-      detectorBarra = new BarcodeDetector({ 
-        formats: ['code_128', 'code_39', 'ean_13', 'data_matrix', 'qr_code'] 
-      });
+      detectorBarra = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'data_matrix', 'qr_code'] });
     } catch (e) {}
   }
 
@@ -80,11 +86,12 @@ async function iniciarSistemaLeitura() {
     tessedit_pageseg_mode: '11', 
   });
 
+  logTerminal("Visor Pronto. Escaneando...", "info");
   ocrAtivo = true;
   loopLeituraOCR();
 }
 
-// Borda verde desenhada na tela sobre o número lido
+// HUD de marcação na tela
 function renderizarHUDLoop() {
   const ctx = canvasOverlay.getContext('2d');
   canvasOverlay.width = video.clientWidth;
@@ -107,7 +114,7 @@ function renderizarHUDLoop() {
 
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#00e676';
-      ctx.fillStyle = 'rgba(0, 230, 118, 0.15)';
+      ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
       ctx.strokeRect(x, y, w, h);
       ctx.fillRect(x, y, w, h);
     });
@@ -116,7 +123,6 @@ function renderizarHUDLoop() {
   requestAnimationFrame(renderizarHUDLoop);
 }
 
-// Processamento OCR
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 80);
@@ -130,7 +136,7 @@ async function loopLeituraOCR() {
     if (vw > 0 && vh > 0) {
       const novosElementos = [];
 
-      // 1. Leitura por Código de Barras
+      // 1. BARCODE
       if (detectorBarra) {
         try {
           const codigos = await detectorBarra.detect(video);
@@ -153,15 +159,16 @@ async function loopLeituraOCR() {
 
               elementosHUDAtivos = novosElementos;
               if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
-
-              await enviarParaAppsScript(huEncontrada);
+              
+              logTerminal(`HU Barcode Detectada: ${huEncontrada}`, 'warn');
+              await testarEEnviarAppsScript(huEncontrada);
               return;
             }
           }
         } catch (eBarra) {}
       }
 
-      // 2. Leitura OCR por Texto (SSCC)
+      // 2. TEXTO OCR
       canvas.width = vw;
       canvas.height = vh;
       const ctx = canvas.getContext('2d');
@@ -183,8 +190,9 @@ async function loopLeituraOCR() {
         elementosHUDAtivos = novosElementos;
 
         if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
-
-        await enviarParaAppsScript(huEncontrada);
+        
+        logTerminal(`HU Texto Detectada: ${huEncontrada}`, 'warn');
+        await testarEEnviarAppsScript(huEncontrada);
         return;
       } else {
         elementosHUDAtivos = novosElementos;
@@ -200,42 +208,38 @@ async function loopLeituraOCR() {
   }
 }
 
-// 🟢 CONEXÃO GARANTIDA COM O GOOGLE APPS SCRIPT
-async function enviarParaAppsScript(huCompleta) {
-  const timerSeguranca = setTimeout(() => {
-    if (processandoHU) resetarVisor();
-  }, 4000);
+// 🟢 FUNÇÃO DE TESTE / ENVIO COM LOG EM TEMPO REAL
+async function testarEEnviarAppsScript(hu) {
+  logTerminal(`Enviando POST para Apps Script...`, 'info');
 
   try {
-    // Usando URLSearchParams + no-cors para contornar qualquer bloqueio da planilha
-    const dados = new URLSearchParams();
-    dados.append('hu', huCompleta);
+    // Usando GET via QueryParam para garantir que o Google Apps Script responda sem bloqueios de CORS/Redirect
+    const urlComParam = `${SCRIPT_URL}?hu=${encodeURIComponent(hu)}`;
 
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: dados
+    const response = await fetch(urlComParam, {
+      method: 'GET',
+      mode: 'cors',
+      redirect: 'follow'
     });
 
-    clearTimeout(timerSeguranca);
-    tocarBip();
-    setTimeout(resetarVisor, 1200);
-  } catch (e) {
-    console.error("Erro no envio:", e);
-    clearTimeout(timerSeguranca);
-    setTimeout(resetarVisor, 1200);
+    if (response.ok) {
+      const respostaTexto = await response.text();
+      logTerminal(`✅ SUCESSO: ${respostaTexto}`, 'info');
+      tocarBip();
+    } else {
+      logTerminal(`⚠️ Resposta HTTP: ${response.status}`, 'warn');
+    }
+  } catch (err) {
+    logTerminal(`❌ ERRO DE CONEXÃO: ${err.message}`, 'error');
+  } finally {
+    setTimeout(resetarVisor, 2000);
   }
 }
 
 function resetarVisor() {
   elementosHUDAtivos = [];
   if (modoLeituraEl) modoLeituraEl.innerText = "ESCANEANDO...";
-
   processandoHU = false;
   ocrAtivo = true;
-
   setTimeout(loopLeituraOCR, 100);
 }
