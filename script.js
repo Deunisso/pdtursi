@@ -75,37 +75,40 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// 🔄 BUSCA E SINCRONIZA DADOS DA PLANILHA (Sempre atualizado)
+// Substitua a sua função carregarDadosPlanilha por esta:
 async function carregarDadosPlanilha() {
   try {
-    const res = await fetch(SCRIPT_URL);
+    // Adicionamos timestamp para evitar que o navegador guarde em cache
+    const urlAntiCache = `${SCRIPT_URL}?t=${new Date().getTime()}`;
+    const res = await fetch(urlAntiCache);
+    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     
     const data = await res.json();
     
-    // Sucesso na conexão: Esconde o log se estivesse aberto por erro anterior
+    // Esconde os logs se a conexão der certo
     ocultarTerminalLog();
 
-    // Atualiza o contador
+    // 1. Atualiza o contador do canto superior direito
     if (contadorDigitosEl) {
-      contadorDigitosEl.innerText = `${data.pendentes} RESTANTES`;
+      contadorDigitosEl.innerText = `${data.pendentes || 0} RESTANTES`;
     }
 
-    // Exibe apenas os 5 ÚLTIMOS DÍGITOS de cada HU
+    // 2. Renderiza a lista de HUs no painel inferior
     if (containerListaHus) {
       if (data.lista_pendentes && data.lista_pendentes.length > 0) {
         containerListaHus.innerHTML = data.lista_pendentes
           .map(hu => {
-            const ultimos5 = hu.slice(-5); // Pega os 5 últimos dígitos
+            const ultimos5 = String(hu).slice(-5); // Garante os últimos 5 dígitos
             return `<div class="hu-chip" title="${hu}">...${ultimos5}</div>`;
           })
           .join('');
       } else {
-        containerListaHus.innerHTML = `<div class="hu-chip" style="color:#00e676;">0 PENDENTES</div>`;
+        containerListaHus.innerHTML = `<div class="hu-chip" style="color:#00e676; border-color:#00e676;">0 PENDENTES</div>`;
       }
     }
   } catch (err) {
-    logTerminal(`Falha na sincronização: ${err.message}`, "error");
+    logTerminal(`Falha ao carregar HUs: ${err.message}`, "error");
   }
 }
 
