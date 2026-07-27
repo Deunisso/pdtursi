@@ -1,9 +1,5 @@
-// =================================================================
-// CONFIGURAÇÃO: URL do Google Apps Script
-// =================================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
-// Elementos DOM
 const video = document.getElementById('webcam');
 const modoLeituraEl = document.getElementById('modo-leitura');
 const contadorDigitosEl = document.getElementById('contador-digitos');
@@ -31,16 +27,12 @@ let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
 let detectorBarra = null;
-let intervalSincronizacao = null;
 
-// Exibe logs apenas quando necessário (exibe painel se for Erro, oculta se for Sucesso)
 function logTerminal(mensagem, tipo = 'info') {
   if (!logMensagensEl) return;
-  
   if (tipo === 'error') {
     if (logTerminalEl) logTerminalEl.classList.remove('oculto');
   }
-
   const div = document.createElement('div');
   div.className = `log-${tipo}`;
   div.innerText = `[${new Date().toLocaleTimeString()}] ${mensagem}`;
@@ -49,9 +41,7 @@ function logTerminal(mensagem, tipo = 'info') {
 }
 
 function ocultarTerminalLog() {
-  if (logTerminalEl) {
-    logTerminalEl.classList.add('oculto');
-  }
+  if (logTerminalEl) logTerminalEl.classList.add('oculto');
 }
 
 function extrairNumeros(str) {
@@ -75,31 +65,25 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Substitua a sua função carregarDadosPlanilha por esta:
+// 🔄 SINCRONIZAÇÃO EM TEMPO REAL
 async function carregarDadosPlanilha() {
   try {
-    // Adicionamos timestamp para evitar que o navegador guarde em cache
     const urlAntiCache = `${SCRIPT_URL}?t=${new Date().getTime()}`;
     const res = await fetch(urlAntiCache);
-    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     
     const data = await res.json();
-    
-    // Esconde os logs se a conexão der certo
     ocultarTerminalLog();
 
-    // 1. Atualiza o contador do canto superior direito
     if (contadorDigitosEl) {
       contadorDigitosEl.innerText = `${data.pendentes || 0} RESTANTES`;
     }
 
-    // 2. Renderiza a lista de HUs no painel inferior
     if (containerListaHus) {
       if (data.lista_pendentes && data.lista_pendentes.length > 0) {
         containerListaHus.innerHTML = data.lista_pendentes
           .map(hu => {
-            const ultimos5 = String(hu).slice(-5); // Garante os últimos 5 dígitos
+            const ultimos5 = String(hu).slice(-5); // Exibe apenas os 5 últimos dígitos
             return `<div class="hu-chip" title="${hu}">...${ultimos5}</div>`;
           })
           .join('');
@@ -108,28 +92,24 @@ async function carregarDadosPlanilha() {
       }
     }
   } catch (err) {
-    logTerminal(`Falha ao carregar HUs: ${err.message}`, "error");
+    logTerminal(`Falha ao conectar: ${err.message}`, "error");
   }
 }
 
-// Inicia a Câmera e dispara o Loop de Sincronização
+// Inicializar Câmera e Timer
 navigator.mediaDevices.getUserMedia({ 
   video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
 .then(stream => {
   video.srcObject = stream;
   
-  // Primeira carga dos dados
   carregarDadosPlanilha();
-  
-  // ⏱️ Sincronização contínua a cada 5 segundos
-  if (intervalSincronizacao) clearInterval(intervalSincronizacao);
-  intervalSincronizacao = setInterval(carregarDadosPlanilha, 5000);
+  setInterval(carregarDadosPlanilha, 4000); // Consulta a planilha a cada 4 segundos
 
   iniciarSistemaLeitura();
   requestAnimationFrame(renderizarHUDLoop);
 })
-.catch(err => logTerminal("Erro ao abrir Câmera: " + err.message, "error"));
+.catch(err => logTerminal("Erro na Câmera: " + err.message, "error"));
 
 async function iniciarSistemaLeitura() {
   if ('BarcodeDetector' in window) {
@@ -192,7 +172,7 @@ async function loopLeituraOCR() {
     if (vw > 0 && vh > 0) {
       const novosElementos = [];
 
-      // 1. BARCODE
+      // Barcode
       if (detectorBarra) {
         try {
           const codigos = await detectorBarra.detect(video);
@@ -223,7 +203,7 @@ async function loopLeituraOCR() {
         } catch (eBarra) {}
       }
 
-      // 2. OCR
+      // OCR
       canvas.width = vw;
       canvas.height = vh;
       const ctx = canvas.getContext('2d');
@@ -262,7 +242,6 @@ async function loopLeituraOCR() {
   }
 }
 
-// Envio da HU lida
 async function enviarParaAppsScript(huCompleta) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -274,9 +253,7 @@ async function enviarParaAppsScript(huCompleta) {
 
     if (resposta.status === 'sucesso' || resposta.status === 'ja_lido') {
       tocarBip();
-      await carregarDadosPlanilha(); // Atualiza a lista imediatamente
-    } else if (resposta.status === 'nao_encontrado') {
-      logTerminal(`HU ${huCompleta.slice(-5)} não encontrada na lista!`, 'error');
+      await carregarDadosPlanilha();
     }
   } catch (e) {
     logTerminal(`Erro ao enviar: ${e.message}`, 'error');
