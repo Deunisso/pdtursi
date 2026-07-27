@@ -7,6 +7,7 @@ const containerListaHus = document.getElementById('container-lista-hus');
 const logTerminalEl = document.getElementById('log-terminal');
 const logMensagensEl = document.getElementById('log-mensagens');
 const canvas = document.getElementById('canvas-processamento');
+const popupLeituraEl = document.getElementById('popup-leitura');
 
 let audioCtx = null;
 
@@ -43,21 +44,6 @@ function tocarBipInstantaneo() {
 document.body.addEventListener('touchstart', inicializarAudio, { once: true });
 document.body.addEventListener('click', inicializarAudio, { once: true });
 
-let canvasOverlay = document.getElementById('canvas-overlay');
-if (!canvasOverlay) {
-  canvasOverlay = document.createElement('canvas');
-  canvasOverlay.id = 'canvas-overlay';
-  canvasOverlay.style.position = 'absolute';
-  canvasOverlay.style.top = '0';
-  canvasOverlay.style.left = '0';
-  canvasOverlay.style.width = '100%';
-  canvasOverlay.style.height = '100%';
-  canvasOverlay.style.pointerEvents = 'none';
-  canvasOverlay.style.zIndex = '10';
-  video.parentElement.appendChild(canvasOverlay);
-}
-
-let elementosHUDAtivos = [];
 let ocrAtivo = false;
 let processandoHU = false;
 let workerOCR = null;
@@ -83,7 +69,23 @@ function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// 🔄 SINCRONIZAÇÃO EM TEMPO REAL
+// ✨ EXIBE A ANIMAÇÃO DO CÓDIGO NO CENTRO DA TELA
+function exibirAnimacaoCentral(codigoCompleto) {
+  if (!popupLeituraEl) return;
+  
+  // Pega os últimos 5 dígitos para exibir em destaque grande
+  const ultimos5 = String(codigoCompleto).slice(-5);
+  popupLeituraEl.innerText = ultimos5;
+  popupLeituraEl.classList.add('ativo');
+}
+
+function ocultarAnimacaoCentral() {
+  if (popupLeituraEl) {
+    popupLeituraEl.classList.remove('ativo');
+  }
+}
+
+// 🔄 BUSCA DADOS NA PLANILHA
 async function carregarDadosPlanilha() {
   try {
     const res = await fetch(`${SCRIPT_URL}?t=${Date.now()}`);
@@ -100,7 +102,7 @@ async function carregarDadosPlanilha() {
       if (data.lista_pendentes && data.lista_pendentes.length > 0) {
         containerListaHus.innerHTML = data.lista_pendentes
           .map(hu => {
-            const ultimos5 = String(hu).slice(-5); // Exibe apenas os 5 últimos dígitos
+            const ultimos5 = String(hu).slice(-5); // APENAS OS 5 DÍGITOS PUROS
             return `<div class="hu-chip" title="${hu}">${ultimos5}</div>`;
           })
           .join('');
@@ -123,7 +125,6 @@ navigator.mediaDevices.getUserMedia({
   setInterval(carregarDadosPlanilha, 4000);
 
   iniciarSistemaLeitura();
-  requestAnimationFrame(renderizarHUDLoop);
 })
 .catch(err => logTerminal("Erro ao abrir Câmera: " + err.message, "error"));
 
@@ -144,37 +145,6 @@ async function iniciarSistemaLeitura() {
   loopLeituraOCR();
 }
 
-function renderizarHUDLoop() {
-  const ctx = canvasOverlay.getContext('2d');
-  canvasOverlay.width = video.clientWidth;
-  canvasOverlay.height = video.clientHeight;
-
-  ctx.clearRect(0, 0, canvasOverlay.width, canvasOverlay.height);
-
-  if (video.videoWidth > 0 && elementosHUDAtivos.length > 0) {
-    const scaleX = canvasOverlay.width / video.videoWidth;
-    const scaleY = canvasOverlay.height / video.videoHeight;
-
-    elementosHUDAtivos.forEach(item => {
-      const { bbox } = item;
-      if (!bbox) return;
-
-      const x = bbox.x0 * scaleX;
-      const y = bbox.y0 * scaleY;
-      const w = (bbox.x1 - bbox.x0) * scaleX;
-      const h = (bbox.y1 - bbox.y0) * scaleY;
-
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#00e676';
-      ctx.fillStyle = 'rgba(0, 230, 118, 0.25)';
-      ctx.strokeRect(x, y, w, h);
-      ctx.fillRect(x, y, w, h);
-    });
-  }
-
-  requestAnimationFrame(renderizarHUDLoop);
-}
-
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
     setTimeout(loopLeituraOCR, 80);
@@ -186,9 +156,8 @@ async function loopLeituraOCR() {
     const vh = video.videoHeight;
 
     if (vw > 0 && vh > 0) {
-      const novosElementos = [];
 
-      // Barcode
+      // 1. Barcode Detector
       if (detectorBarra) {
         try {
           const codigos = await detectorBarra.detect(video);
@@ -199,17 +168,8 @@ async function loopLeituraOCR() {
             if (matchBarra && !processandoHU) {
               processandoHU = true;
               tocarBipInstantaneo();
+              exibirAnimacaoCentral(matchBarra[0]); // Animação central sem caixa verde!
 
-              novosElementos.push({
-                bbox: {
-                  x0: codigo.boundingBox.x,
-                  y0: codigo.boundingBox.y,
-                  x1: codigo.boundingBox.x + codigo.boundingBox.width,
-                  y1: codigo.boundingBox.y + codigo.boundingBox.height
-                }
-              });
-
-              elementosHUDAtivos = novosElementos;
               if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
 
               await enviarParaAppsScript(matchBarra[0]);
@@ -219,7 +179,7 @@ async function loopLeituraOCR() {
         } catch (eBarra) {}
       }
 
-      // OCR
+      // 2. OCR Fallback
       canvas.width = vw;
       canvas.height = vh;
       const ctx = canvas.getContext('2d');
@@ -238,16 +198,13 @@ async function loopLeituraOCR() {
         tocarBipInstantaneo();
 
         const huEncontrada = extrairNumeros(matchSSCC.text).match(/1789\d{14}/)[0];
-
-        novosElementos.push({ bbox: matchSSCC.bbox });
-        elementosHUDAtivos = novosElementos;
+        exibirAnimacaoCentral(huEncontrada); // Animação central sem caixa verde!
 
         if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
 
         await enviarParaAppsScript(huEncontrada);
         return;
       } else {
-        elementosHUDAtivos = novosElementos;
         if (modoLeituraEl) modoLeituraEl.innerText = "ESCANEANDO...";
       }
     }
@@ -271,12 +228,12 @@ async function enviarParaAppsScript(huCompleta) {
   } catch (e) {
     logTerminal(`Erro ao enviar: ${e.message}`, 'error');
   } finally {
-    setTimeout(resetarVisor, 1000);
+    setTimeout(resetarVisor, 1200);
   }
 }
 
 function resetarVisor() {
-  elementosHUDAtivos = [];
+  ocultarAnimacaoCentral();
   if (modoLeituraEl) modoLeituraEl.innerText = "ESCANEANDO...";
   processandoHU = false;
   ocrAtivo = true;
