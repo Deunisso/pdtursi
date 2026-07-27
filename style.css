@@ -82,14 +82,14 @@ video {
   backdrop-filter: blur(4px);
 }
 
-/* 🔝 PAINEL DE HUS PENDENTES (AGORA POSICIONADO NO TOPO CENTRO) */
+/* 🔻 PAINEL DE HUS PENDENTES (FLUTUANDO NA PARTE INFERIOR CENTRO) */
 #painel-pendentes {
   position: absolute;
-  top: 8px;
+  bottom: 8px; /* Mapeado para o rodapé */
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
-  width: calc(100% - 240px); /* Ocupa o espaço livre entre a esquerda e a direita */
+  width: calc(100% - 240px); /* Garante que não invada os cantos */
   max-width: 450px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #00d2ff;
@@ -110,7 +110,6 @@ video {
   white-space: nowrap;
 }
 
-/* Container Deslizável dos Cards */
 .lista-hus {
   display: flex;
   gap: 6px;
@@ -129,15 +128,15 @@ video {
   background: #00d2ff;
 }
 
-/* Cards com 5 dígitos */
+/* Cards sem os "..." */
 .hu-chip {
   background: rgba(20, 20, 30, 0.95);
   border: 1px solid #ffd700;
   color: #ffd700;
   font-family: monospace;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: bold;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 5px;
   flex-shrink: 0;
 }
