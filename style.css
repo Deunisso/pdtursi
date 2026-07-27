@@ -9,27 +9,30 @@ html, body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: #000;
+  background: #0a0a0c;
   color: #fff;
 }
 
+/* Container Principal em Layout Flex (Organiza de cima para baixo) */
 .app-container {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  width: 100vw;
+  height: 100vh;
+  position: relative;
 }
 
-/* Câmera Fullscreen */
+/* 🟢 CÂMERA COM BORDA ESTILIZADA */
 #video-container {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: relative;
+  flex: 1; /* Ocupa todo o espaço superior disponível */
   width: 100%;
-  height: 100%;
-  z-index: 1;
+  overflow: hidden;
+  background: #000;
+  
+  /* Borda ao redor do visor da câmera */
+  border: 3px solid #00d2ff;
+  box-shadow: inset 0 0 15px rgba(0, 210, 255, 0.3), 0 0 15px rgba(0, 0, 0, 0.8);
 }
 
 video {
@@ -38,7 +41,7 @@ video {
   object-fit: cover;
 }
 
-/* TOP-ESQUERDO */
+/* STATUS TOP-ESQUERDO ("ESCANEANDO...") */
 .status-escaneando {
   position: absolute;
   top: 10px;
@@ -47,7 +50,7 @@ video {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 6px 12px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #00e676;
   border-radius: 20px;
@@ -55,7 +58,7 @@ video {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 1px;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(4px);
   box-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
 }
 
@@ -68,79 +71,71 @@ video {
   box-shadow: 0 0 6px #00e676;
 }
 
-/* TOP-DIREITO */
+/* CONTADOR TOP-DIREITO ("2 RESTANTES") */
 .contador-box {
   position: absolute;
   top: 10px;
   right: 10px;
   z-index: 50;
-  padding: 6px 14px;
+  padding: 6px 12px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #ffd700;
   border-radius: 10px;
   color: #ffd700;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 900;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(4px);
 }
 
-/* 🎯 LOGS DE CONEXÃO NO MEIO DA TELA */
+/* TERMINAL DE LOGS (OCULTO POR PADRÃO - SÓ APARECE EM CASO DE ERRO) */
 .terminal-box {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 40;
+  z-index: 60;
   width: 85%;
-  max-width: 450px;
-  background: rgba(5, 8, 15, 0.88);
-  border: 1px solid rgba(0, 210, 255, 0.5);
+  max-width: 400px;
+  background: rgba(5, 8, 15, 0.95);
+  border: 1px solid #ff5252;
   border-radius: 8px;
-  padding: 8px;
+  padding: 10px;
   font-family: monospace;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
-  pointer-events: none;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
 }
 
 .terminal-header {
-  font-size: 9px;
-  color: #00d2ff;
+  font-size: 10px;
+  color: #ff5252;
   font-weight: bold;
-  border-bottom: 1px solid rgba(0, 210, 255, 0.2);
+  border-bottom: 1px solid rgba(255, 82, 82, 0.3);
   padding-bottom: 4px;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  margin-bottom: 6px;
 }
 
 .terminal-body {
   font-size: 11px;
-  max-height: 80px;
+  max-height: 90px;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
 }
 
-.log-info { color: #00e676; }
-.log-warn { color: #ffd700; }
-.log-error { color: #ff5252; font-weight: bold; }
+.oculto {
+  display: none !important;
+}
 
-/* 🔻 PAINEL INFERIOR AJUSTADO (TOTALMENTE VISÍVEL NA TELA) */
+/* 🔻 PAINEL DE HUS PENDENTES (FIXO NA PARTE INFERIOR) */
 #painel-pendentes {
-  position: absolute;
-  bottom: 0;
-  left: 0;
   width: 100%;
-  height: 65px; /* Altura ideal sem estourar o viewport */
-  z-index: 50;
-  background: rgba(8, 8, 12, 0.95);
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 6px 12px;
+  height: 70px; /* Altura fixa garantida */
+  background: #111118;
+  border-top: 2px solid #00d2ff;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
+  z-index: 100;
+  flex-shrink: 0;
 }
 
 .pendentes-header {
@@ -148,6 +143,7 @@ video {
   font-weight: 800;
   color: #ff5252;
   letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
 .lista-hus {
@@ -155,25 +151,22 @@ video {
   gap: 8px;
   overflow-x: auto;
   white-space: nowrap;
+  padding-bottom: 2px;
 }
 
+/* Estilo do Chip exibindo apenas os 5 últimos dígitos */
 .hu-chip {
-  background: #181824;
+  background: #1c1c2b;
   border: 1px solid #00d2ff;
   color: #ffd700;
   font-family: monospace;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: bold;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-block;
 }
 
 #canvas-processamento {
   display: none !important;
 }
-
-/* Classe para ocultar o terminal de logs quando a conexão estiver ok */
-.oculto {
-  display: none !important;
-}
-
