@@ -14,16 +14,14 @@ html, body {
   color: #fff;
 }
 
-/* Container Principal com borda/espaciamento lateral maior */
 .app-container {
   position: relative;
   width: 100vw;
   height: 100vh;
   background: #000;
-  padding: 8px 16px; /* Aumenta a margem/borda lateral externa */
+  padding: 8px 12px;
 }
 
-/* 📷 VISOR DA CÂMERA (SEM BORDA VERMELHA, DENTRO DA MOLDURA PRETA) */
 #video-container {
   position: relative;
   width: 100%;
@@ -40,16 +38,16 @@ video {
   display: block;
 }
 
-/* STATUS TOP-ESQUERDO ("ESCANEANDO...") */
+/* STATUS TOP-ESQUERDO */
 .status-escaneando {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 8px;
+  left: 8px;
   z-index: 50;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #00e676;
   border-radius: 20px;
@@ -68,23 +66,83 @@ video {
   box-shadow: 0 0 6px #00e676;
 }
 
-/* CONTADOR TOP-DIREITO ("RESTANTES") */
+/* CONTADOR TOP-DIREITO */
 .contador-box {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   z-index: 50;
-  padding: 6px 12px;
+  padding: 5px 10px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #ffd700;
-  border-radius: 10px;
+  border-radius: 8px;
   color: #ffd700;
   font-size: 11px;
   font-weight: 900;
   backdrop-filter: blur(4px);
 }
 
-/* LOGS (OCULTO - SÓ EXIBE EM CASO DE ERRO) */
+/* 🔝 PAINEL DE HUS PENDENTES (AGORA POSICIONADO NO TOPO CENTRO) */
+#painel-pendentes {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: calc(100% - 240px); /* Ocupa o espaço livre entre a esquerda e a direita */
+  max-width: 450px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 2px solid #00d2ff;
+  border-radius: 10px;
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  backdrop-filter: blur(4px);
+}
+
+.pendentes-header {
+  font-size: 9px;
+  font-weight: 800;
+  color: #00d2ff;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+/* Container Deslizável dos Cards */
+.lista-hus {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+
+.lista-hus::-webkit-scrollbar {
+  height: 2px;
+}
+.lista-hus::-webkit-scrollbar-thumb {
+  background: #00d2ff;
+}
+
+/* Cards com 5 dígitos */
+.hu-chip {
+  background: rgba(20, 20, 30, 0.95);
+  border: 1px solid #ffd700;
+  color: #ffd700;
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+/* LOGS APENAS EM ERROS */
 .terminal-box {
   position: absolute;
   top: 50%;
@@ -117,66 +175,6 @@ video {
 
 .oculto {
   display: none !important;
-}
-
-/* 🔻 PAINEL DE HUS PENDENTES (FLUTUANDO DENTRO DO VISOR NA PARTE INFERIOR) */
-#painel-pendentes {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
-  width: 90%;
-  max-width: 600px;
-  background: rgba(0, 0, 0, 0.85);
-  border: 2px solid #00d2ff;
-  border-radius: 12px;
-  padding: 6px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  backdrop-filter: blur(6px);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
-}
-
-.pendentes-header {
-  font-size: 10px;
-  font-weight: 800;
-  color: #00d2ff;
-  letter-spacing: 1px;
-  text-align: center;
-}
-
-/* Container Deslizável (Arrastável na Horizontal) */
-.lista-hus {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  white-space: nowrap;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch; /* Arraste suave para celular */
-  padding-bottom: 2px;
-}
-
-.lista-hus::-webkit-scrollbar {
-  height: 3px;
-}
-.lista-hus::-webkit-scrollbar-thumb {
-  background: #00d2ff;
-  border-radius: 3px;
-}
-
-/* Cards com os 5 últimos dígitos */
-.hu-chip {
-  background: rgba(28, 28, 43, 0.9);
-  border: 1px solid #ffd700;
-  color: #ffd700;
-  font-family: monospace;
-  font-size: 12px;
-  font-weight: bold;
-  padding: 4px 10px;
-  border-radius: 6px;
-  flex-shrink: 0;
 }
 
 #canvas-processamento {
