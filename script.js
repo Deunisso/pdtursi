@@ -8,6 +8,42 @@ const logTerminalEl = document.getElementById('log-terminal');
 const logMensagensEl = document.getElementById('log-mensagens');
 const canvas = document.getElementById('canvas-processamento');
 
+let audioCtx = null;
+
+function inicializarAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+
+// 🔊 BIP INSTANTÂNEO (SEM DELAY)
+function tocarBipInstantaneo() {
+  try {
+    inicializarAudio();
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1800, audioCtx.currentTime + 0.08);
+    
+    gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.12);
+  } catch(e) {}
+}
+
+document.body.addEventListener('touchstart', inicializarAudio, { once: true });
+document.body.addEventListener('click', inicializarAudio, { once: true });
+
 let canvasOverlay = document.getElementById('canvas-overlay');
 if (!canvasOverlay) {
   canvasOverlay = document.createElement('canvas');
@@ -48,28 +84,10 @@ function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-function tocarBip() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.15);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.25);
-  } catch(e) {}
-}
-
-// 🔄 BUSCA E SINCRONIZA DADOS DA PLANILHA
+// 🔄 BUSCA DADOS NA PLANILHA
 async function carregarDadosPlanilha() {
   try {
-    const urlAntiCache = `${SCRIPT_URL}?t=${new Date().getTime()}`;
-    const res = await fetch(urlAntiCache);
+    const res = await fetch(`${SCRIPT_URL}?t=${Date.now()}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     
     const data = await res.json();
@@ -83,7 +101,7 @@ async function carregarDadosPlanilha() {
       if (data.lista_pendentes && data.lista_pendentes.length > 0) {
         containerListaHus.innerHTML = data.lista_pendentes
           .map(hu => {
-            const ultimos5 = String(hu).slice(-5); // Exibe os 5 últimos dígitos
+            const ultimos5 = String(hu).slice(-5); // APENAS OS 5 ÚLTIMOS DÍGITOS
             return `<div class="hu-chip" title="${hu}">...${ultimos5}</div>`;
           })
           .join('');
@@ -92,11 +110,10 @@ async function carregarDadosPlanilha() {
       }
     }
   } catch (err) {
-    logTerminal(`Falha ao carregar HUs: ${err.message}`, "error");
+    logTerminal(`Falha na conexão: ${err.message}`, "error");
   }
 }
 
-// Inicializar Câmera e Sincronização
 navigator.mediaDevices.getUserMedia({ 
   video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
@@ -104,12 +121,12 @@ navigator.mediaDevices.getUserMedia({
   video.srcObject = stream;
   
   carregarDadosPlanilha();
-  setInterval(carregarDadosPlanilha, 4000); // Atualiza os faltantes e HUs a cada 4 segundos
+  setInterval(carregarDadosPlanilha, 4000);
 
   iniciarSistemaLeitura();
   requestAnimationFrame(renderizarHUDLoop);
 })
-.catch(err => logTerminal("Erro na Câmera: " + err.message, "error"));
+.catch(err => logTerminal("Erro ao abrir Câmera: " + err.message, "error"));
 
 async function iniciarSistemaLeitura() {
   if ('BarcodeDetector' in window) {
@@ -150,7 +167,7 @@ function renderizarHUDLoop() {
 
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#00e676';
-      ctx.fillStyle = 'rgba(0, 230, 118, 0.2)';
+      ctx.fillStyle = 'rgba(0, 230, 118, 0.25)';
       ctx.strokeRect(x, y, w, h);
       ctx.fillRect(x, y, w, h);
     });
@@ -181,8 +198,8 @@ async function loopLeituraOCR() {
             const matchBarra = numerosBarra.match(/1789\d{14}/);
 
             if (matchBarra && !processandoHU) {
-              const huEncontrada = matchBarra[0];
               processandoHU = true;
+              tocarBipInstantaneo(); // ⚡ BIP NA HORA!
 
               novosElementos.push({
                 bbox: {
@@ -196,7 +213,7 @@ async function loopLeituraOCR() {
               elementosHUDAtivos = novosElementos;
               if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
 
-              await enviarParaAppsScript(huEncontrada);
+              await enviarParaAppsScript(matchBarra[0]);
               return;
             }
           }
@@ -218,8 +235,10 @@ async function loopLeituraOCR() {
       });
 
       if (matchSSCC && !processandoHU) {
-        const huEncontrada = extrairNumeros(matchSSCC.text).match(/1789\d{14}/)[0];
         processandoHU = true;
+        tocarBipInstantaneo(); // ⚡ BIP NA HORA!
+
+        const huEncontrada = extrairNumeros(matchSSCC.text).match(/1789\d{14}/)[0];
 
         novosElementos.push({ bbox: matchSSCC.bbox });
         elementosHUDAtivos = novosElementos;
@@ -249,16 +268,11 @@ async function enviarParaAppsScript(huCompleta) {
       body: JSON.stringify({ hu: huCompleta })
     });
     
-    const resposta = await res.json();
-
-    if (resposta.status === 'sucesso' || resposta.status === 'ja_lido') {
-      tocarBip();
-      await carregarDadosPlanilha();
-    }
+    await carregarDadosPlanilha();
   } catch (e) {
     logTerminal(`Erro ao enviar: ${e.message}`, 'error');
   } finally {
-    setTimeout(resetarVisor, 1200);
+    setTimeout(resetarVisor, 1000);
   }
 }
 
