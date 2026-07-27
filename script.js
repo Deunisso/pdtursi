@@ -101,7 +101,7 @@ async function carregarDadosPlanilha() {
         containerListaHus.innerHTML = data.lista_pendentes
           .map(hu => {
             const ultimos5 = String(hu).slice(-5); // Exibe apenas os 5 últimos dígitos
-            return `<div class="hu-chip" title="${hu}">...${ultimos5}</div>`;
+            return `<div class="hu-chip" title="${hu}">${ultimos5}</div>`;
           })
           .join('');
       } else {
