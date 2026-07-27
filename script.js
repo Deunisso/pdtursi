@@ -65,7 +65,7 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// 🔄 SINCRONIZAÇÃO EM TEMPO REAL
+// 🔄 BUSCA E SINCRONIZA DADOS DA PLANILHA
 async function carregarDadosPlanilha() {
   try {
     const urlAntiCache = `${SCRIPT_URL}?t=${new Date().getTime()}`;
@@ -83,7 +83,7 @@ async function carregarDadosPlanilha() {
       if (data.lista_pendentes && data.lista_pendentes.length > 0) {
         containerListaHus.innerHTML = data.lista_pendentes
           .map(hu => {
-            const ultimos5 = String(hu).slice(-5); // Exibe apenas os 5 últimos dígitos
+            const ultimos5 = String(hu).slice(-5); // Exibe os 5 últimos dígitos
             return `<div class="hu-chip" title="${hu}">...${ultimos5}</div>`;
           })
           .join('');
@@ -92,11 +92,11 @@ async function carregarDadosPlanilha() {
       }
     }
   } catch (err) {
-    logTerminal(`Falha ao conectar: ${err.message}`, "error");
+    logTerminal(`Falha ao carregar HUs: ${err.message}`, "error");
   }
 }
 
-// Inicializar Câmera e Timer
+// Inicializar Câmera e Sincronização
 navigator.mediaDevices.getUserMedia({ 
   video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
@@ -104,7 +104,7 @@ navigator.mediaDevices.getUserMedia({
   video.srcObject = stream;
   
   carregarDadosPlanilha();
-  setInterval(carregarDadosPlanilha, 4000); // Consulta a planilha a cada 4 segundos
+  setInterval(carregarDadosPlanilha, 4000); // Atualiza os faltantes e HUs a cada 4 segundos
 
   iniciarSistemaLeitura();
   requestAnimationFrame(renderizarHUDLoop);
