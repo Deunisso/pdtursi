@@ -8,6 +8,7 @@ const logTerminalEl = document.getElementById('log-terminal');
 const logMensagensEl = document.getElementById('log-mensagens');
 const canvas = document.getElementById('canvas-processamento');
 const popupLeituraEl = document.getElementById('popup-leitura');
+const canvasFogos = document.getElementById('canvas-fogos');
 
 let audioCtx = null;
 
@@ -49,6 +50,56 @@ let processandoHU = false;
 let workerOCR = null;
 let detectorBarra = null;
 
+// 🎆 LÓGICA DE FOGOS DE ARTIFÍCIO
+function soltarFogos() {
+  if (!canvasFogos) return;
+  const ctx = canvasFogos.getContext('2d');
+  canvasFogos.width = canvasFogos.parentElement.clientWidth;
+  canvasFogos.height = canvasFogos.parentElement.clientHeight;
+
+  const particulas = [];
+  const cores = ['#00e676', '#ffd700', '#00d2ff', '#ff1744', '#ffffff'];
+
+  for (let i = 0; i < 40; i++) {
+    particulas.push({
+      x: canvasFogos.width / 2,
+      y: canvasFogos.height / 2,
+      vx: (Math.random() - 0.5) * 12,
+      vy: (Math.random() - 0.5) * 12,
+      cor: cores[Math.floor(Math.random() * cores.length)],
+      tamanho: Math.random() * 4 + 2,
+      alpha: 1
+    });
+  }
+
+  function animar() {
+    ctx.clearRect(0, 0, canvasFogos.width, canvasFogos.height);
+    let restam = false;
+
+    particulas.forEach(p => {
+      if (p.alpha > 0) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= 0.04;
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.fillStyle = p.cor;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.tamanho, 0, Math.PI * 2);
+        ctx.fill();
+        restam = true;
+      }
+    });
+
+    if (restam) {
+      requestAnimationFrame(animar);
+    } else {
+      ctx.clearRect(0, 0, canvasFogos.width, canvasFogos.height);
+    }
+  }
+
+  animar();
+}
+
 function logTerminal(mensagem, tipo = 'info') {
   if (!logMensagensEl) return;
   if (tipo === 'error') {
@@ -69,13 +120,10 @@ function extrairNumeros(str) {
   return String(str || '').replace(/[^\d]/g, '').trim();
 }
 
-// ✨ EXIBE A ANIMAÇÃO DO CÓDIGO NO CENTRO DA TELA
+// ✨ EXIBE O NÚMERO COMPLETO NO CENTRO
 function exibirAnimacaoCentral(codigoCompleto) {
   if (!popupLeituraEl) return;
-  
-  // Pega os últimos 5 dígitos para exibir em destaque grande
-  const ultimos5 = String(codigoCompleto).slice(-5);
-  popupLeituraEl.innerText = ultimos5;
+  popupLeituraEl.innerText = codigoCompleto; // Exibe o número inteiro
   popupLeituraEl.classList.add('ativo');
 }
 
@@ -85,7 +133,7 @@ function ocultarAnimacaoCentral() {
   }
 }
 
-// 🔄 BUSCA DADOS NA PLANILHA
+// 🔄 SINCRONIZAÇÃO DA PLANILHA
 async function carregarDadosPlanilha() {
   try {
     const res = await fetch(`${SCRIPT_URL}?t=${Date.now()}`);
@@ -102,7 +150,7 @@ async function carregarDadosPlanilha() {
       if (data.lista_pendentes && data.lista_pendentes.length > 0) {
         containerListaHus.innerHTML = data.lista_pendentes
           .map(hu => {
-            const ultimos5 = String(hu).slice(-5); // APENAS OS 5 DÍGITOS PUROS
+            const ultimos5 = String(hu).slice(-5);
             return `<div class="hu-chip" title="${hu}">${ultimos5}</div>`;
           })
           .join('');
@@ -147,7 +195,7 @@ async function iniciarSistemaLeitura() {
 
 async function loopLeituraOCR() {
   if (!ocrAtivo || processandoHU) {
-    setTimeout(loopLeituraOCR, 80);
+    setTimeout(loopLeituraOCR, 60);
     return;
   }
 
@@ -168,7 +216,8 @@ async function loopLeituraOCR() {
             if (matchBarra && !processandoHU) {
               processandoHU = true;
               tocarBipInstantaneo();
-              exibirAnimacaoCentral(matchBarra[0]); // Animação central sem caixa verde!
+              soltarFogos(); // Comemoração de fogos!
+              exibirAnimacaoCentral(matchBarra[0]);
 
               if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
 
@@ -196,9 +245,10 @@ async function loopLeituraOCR() {
       if (matchSSCC && !processandoHU) {
         processandoHU = true;
         tocarBipInstantaneo();
+        soltarFogos(); // Comemoração de fogos!
 
         const huEncontrada = extrairNumeros(matchSSCC.text).match(/1789\d{14}/)[0];
-        exibirAnimacaoCentral(huEncontrada); // Animação central sem caixa verde!
+        exibirAnimacaoCentral(huEncontrada);
 
         if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
 
@@ -212,23 +262,24 @@ async function loopLeituraOCR() {
     console.error(e);
   } finally {
     if (!processandoHU) {
-      setTimeout(loopLeituraOCR, 90);
+      setTimeout(loopLeituraOCR, 60);
     }
   }
 }
 
 async function enviarParaAppsScript(huCompleta) {
   try {
-    const res = await fetch(SCRIPT_URL, {
+    // Dispara o envio sem bloquear a interface de forma demorada
+    fetch(SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ hu: huCompleta })
-    });
-    
-    await carregarDadosPlanilha();
+    }).then(() => carregarDadosPlanilha());
+
   } catch (e) {
     logTerminal(`Erro ao enviar: ${e.message}`, 'error');
   } finally {
-    setTimeout(resetarVisor, 1200);
+    // 🚀 SAÍDA SUPER RÁPIDA: Reduzido para 400ms para permitir escaneamento em massa!
+    setTimeout(resetarVisor, 400);
   }
 }
 
@@ -237,5 +288,5 @@ function resetarVisor() {
   if (modoLeituraEl) modoLeituraEl.innerText = "ESCANEANDO...";
   processandoHU = false;
   ocrAtivo = true;
-  setTimeout(loopLeituraOCR, 100);
+  setTimeout(loopLeituraOCR, 50);
 }
