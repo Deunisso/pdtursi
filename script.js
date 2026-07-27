@@ -1,13 +1,15 @@
 // =================================================================
-// CONFIGURAÇÃO: URL do Google Apps Script
+// ⚠️ ATENÇÃO: Cole a URL da Nova Implantação do seu Apps Script aqui
 // =================================================================
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwvKN1zlgTn2F-iY-CgqU9bcSuvBgRvtAMQGeMsa9psE2B7snJ6d8Ov1dCLbiL0YVWt_A/exec";
 
 // Elementos DOM
 const video = document.getElementById('webcam');
 const modoLeituraEl = document.getElementById('modo-leitura');
-const canvas = document.getElementById('canvas-processamento');
+const contadorDigitosEl = document.getElementById('contador-digitos');
+const containerListaHus = document.getElementById('container-lista-hus');
 const logMensagensEl = document.getElementById('log-mensagens');
+const canvas = document.getElementById('canvas-processamento');
 
 let canvasOverlay = document.getElementById('canvas-overlay');
 if (!canvasOverlay) {
@@ -29,7 +31,7 @@ let processandoHU = false;
 let workerOCR = null;
 let detectorBarra = null;
 
-// Função para exibir os Logs no Terminal Central
+// Terminal de logs central
 function logTerminal(mensagem, tipo = 'info') {
   if (!logMensagensEl) return;
   const div = document.createElement('div');
@@ -60,20 +62,46 @@ function tocarBip() {
   } catch(e) {}
 }
 
-// Iniciar Câmera
+// 🔄 BUSCA HUS PENDENTES DA PLANILHA NO INÍCIO
+async function carregarDadosPlanilha() {
+  logTerminal("Conectando à planilha...", "warn");
+  try {
+    const res = await fetch(SCRIPT_URL);
+    const data = await res.json();
+    
+    logTerminal(`Conectado! ${data.pendentes} HUs pendentes.`, "info");
+    
+    if (contadorDigitosEl) {
+      contadorDigitosEl.innerText = `${data.pendentes} RESTANTES`;
+    }
+
+    if (containerListaHus) {
+      if (data.lista_pendentes && data.lista_pendentes.length > 0) {
+        containerListaHus.innerHTML = data.lista_pendentes
+          .map(hu => `<div class="hu-chip" id="chip-${hu}">${hu}</div>`)
+          .join('');
+      } else {
+        containerListaHus.innerHTML = `<div class="hu-chip" style="color:#00e676;">TODAS LIDAS!</div>`;
+      }
+    }
+  } catch (err) {
+    logTerminal(`Erro ao ler planilha: ${err.message}`, "error");
+  }
+}
+
+// Inicializa a câmera e carrega dados
 navigator.mediaDevices.getUserMedia({ 
   video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } 
 })
 .then(stream => {
   video.srcObject = stream;
+  carregarDadosPlanilha();
   iniciarSistemaLeitura();
   requestAnimationFrame(renderizarHUDLoop);
 })
-.catch(err => logTerminal("Erro ao abrir câmera: " + err.message, "error"));
+.catch(err => logTerminal("Erro na Câmera: " + err.message, "error"));
 
 async function iniciarSistemaLeitura() {
-  logTerminal("Carregando OCR e Detectores...", "warn");
-  
   if ('BarcodeDetector' in window) {
     try {
       detectorBarra = new BarcodeDetector({ formats: ['code_128', 'code_39', 'ean_13', 'data_matrix', 'qr_code'] });
@@ -86,12 +114,10 @@ async function iniciarSistemaLeitura() {
     tessedit_pageseg_mode: '11', 
   });
 
-  logTerminal("Visor Pronto. Escaneando...", "info");
   ocrAtivo = true;
   loopLeituraOCR();
 }
 
-// HUD de marcação na tela
 function renderizarHUDLoop() {
   const ctx = canvasOverlay.getContext('2d');
   canvasOverlay.width = video.clientWidth;
@@ -159,16 +185,15 @@ async function loopLeituraOCR() {
 
               elementosHUDAtivos = novosElementos;
               if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
-              
-              logTerminal(`HU Barcode Detectada: ${huEncontrada}`, 'warn');
-              await testarEEnviarAppsScript(huEncontrada);
+
+              await enviarParaAppsScript(huEncontrada);
               return;
             }
           }
         } catch (eBarra) {}
       }
 
-      // 2. TEXTO OCR
+      // 2. OCR
       canvas.width = vw;
       canvas.height = vh;
       const ctx = canvas.getContext('2d');
@@ -190,9 +215,8 @@ async function loopLeituraOCR() {
         elementosHUDAtivos = novosElementos;
 
         if (modoLeituraEl) modoLeituraEl.innerText = "LIDO!";
-        
-        logTerminal(`HU Texto Detectada: ${huEncontrada}`, 'warn');
-        await testarEEnviarAppsScript(huEncontrada);
+
+        await enviarParaAppsScript(huEncontrada);
         return;
       } else {
         elementosHUDAtivos = novosElementos;
@@ -208,31 +232,34 @@ async function loopLeituraOCR() {
   }
 }
 
-// 🟢 FUNÇÃO DE TESTE / ENVIO COM LOG EM TEMPO REAL
-async function testarEEnviarAppsScript(hu) {
-  logTerminal(`Enviando POST para Apps Script...`, 'info');
+// 📤 ENVIO E ATUALIZAÇÃO DA PLANILHA
+async function enviarParaAppsScript(huCompleta) {
+  logTerminal(`Enviando HU: ${huCompleta}...`, 'warn');
 
   try {
-    // Usando GET via QueryParam para garantir que o Google Apps Script responda sem bloqueios de CORS/Redirect
-    const urlComParam = `${SCRIPT_URL}?hu=${encodeURIComponent(hu)}`;
-
-    const response = await fetch(urlComParam, {
-      method: 'GET',
-      mode: 'cors',
-      redirect: 'follow'
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ hu: huCompleta })
     });
+    
+    const resposta = await res.json();
 
-    if (response.ok) {
-      const respostaTexto = await response.text();
-      logTerminal(`✅ SUCESSO: ${respostaTexto}`, 'info');
+    if (resposta.status === 'sucesso') {
+      logTerminal(`✅ HU ${huCompleta} salva na planilha!`, 'info');
       tocarBip();
+      carregarDadosPlanilha(); // Atualiza lista e contador automaticamente
+    } else if (resposta.status === 'ja_lido') {
+      logTerminal(`⚠️ HU ${huCompleta} já havia sido lida.`, 'warn');
+      tocarBip();
+    } else if (resposta.status === 'nao_encontrado') {
+      logTerminal(`❌ HU ${huCompleta} não está na lista!`, 'error');
     } else {
-      logTerminal(`⚠️ Resposta HTTP: ${response.status}`, 'warn');
+      logTerminal(`Erro retornado: ${JSON.stringify(resposta)}`, 'error');
     }
-  } catch (err) {
-    logTerminal(`❌ ERRO DE CONEXÃO: ${err.message}`, 'error');
+  } catch (e) {
+    logTerminal(`Falha no envio POST: ${e.message}`, 'error');
   } finally {
-    setTimeout(resetarVisor, 2000);
+    setTimeout(resetarVisor, 1500);
   }
 }
 
