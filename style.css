@@ -14,25 +14,22 @@ html, body {
   color: #fff;
 }
 
+/* Container Principal com borda/espaciamento lateral maior */
 .app-container {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   width: 100vw;
   height: 100vh;
   background: #000;
+  padding: 8px 16px; /* Aumenta a margem/borda lateral externa */
 }
 
-/* 🔴 CÂMERA COM BORDA VERMELHA E ALTURA AJUSTADA PARA A TELA HORIZONTAL */
+/* 📷 VISOR DA CÂMERA (SEM BORDA VERMELHA, DENTRO DA MOLDURA PRETA) */
 #video-container {
   position: relative;
-  height: calc(100vh - 75px); /* Reservamos 75px para o painel inferior sempre aparecer */
-  margin: 6px;
+  width: 100%;
+  height: 100%;
   background: #000;
-  
-  /* Borda Vermelha Destacada */
-  border: 4px solid #ff1744;
   border-radius: 12px;
-  box-shadow: 0 0 15px rgba(255, 23, 68, 0.4);
   overflow: hidden;
 }
 
@@ -43,16 +40,16 @@ video {
   display: block;
 }
 
-/* STATUS TOP-ESQUERDO */
+/* STATUS TOP-ESQUERDO ("ESCANEANDO...") */
 .status-escaneando {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 10px;
+  left: 10px;
   z-index: 50;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
+  padding: 6px 12px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #00e676;
   border-radius: 20px;
@@ -71,23 +68,23 @@ video {
   box-shadow: 0 0 6px #00e676;
 }
 
-/* CONTADOR TOP-DIREITO */
+/* CONTADOR TOP-DIREITO ("RESTANTES") */
 .contador-box {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 10px;
   z-index: 50;
-  padding: 5px 10px;
+  padding: 6px 12px;
   background: rgba(0, 0, 0, 0.85);
   border: 2px solid #ffd700;
-  border-radius: 8px;
+  border-radius: 10px;
   color: #ffd700;
   font-size: 11px;
   font-weight: 900;
   backdrop-filter: blur(4px);
 }
 
-/* LOGS APENAS EM ERROS */
+/* LOGS (OCULTO - SÓ EXIBE EM CASO DE ERRO) */
 .terminal-box {
   position: absolute;
   top: 50%;
@@ -122,59 +119,64 @@ video {
   display: none !important;
 }
 
-/* 🔻 PAINEL DE HUS PENDENTES (CARDS ARRASTÁVEIS FIOS NA BASE) */
+/* 🔻 PAINEL DE HUS PENDENTES (FLUTUANDO DENTRO DO VISOR NA PARTE INFERIOR) */
 #painel-pendentes {
-  height: 65px;
-  width: 100%;
-  background: #0d0d12;
-  border-top: 2px solid #ff1744;
-  padding: 6px 10px;
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: 90%;
+  max-width: 600px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 2px solid #00d2ff;
+  border-radius: 12px;
+  padding: 6px 12px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 4px;
-  z-index: 100;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
 }
 
 .pendentes-header {
   font-size: 10px;
   font-weight: 800;
-  color: #ff1744;
+  color: #00d2ff;
   letter-spacing: 1px;
+  text-align: center;
 }
 
-/* Container Deslizável (Arrastável) */
+/* Container Deslizável (Arrastável na Horizontal) */
 .lista-hus {
   display: flex;
   gap: 8px;
   overflow-x: auto;
   white-space: nowrap;
   scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch; /* Arraste suave no celular */
+  -webkit-overflow-scrolling: touch; /* Arraste suave para celular */
   padding-bottom: 2px;
 }
 
-/* Scrollbar discreta para PC */
 .lista-hus::-webkit-scrollbar {
-  height: 4px;
+  height: 3px;
 }
 .lista-hus::-webkit-scrollbar-thumb {
-  background: #ff1744;
-  border-radius: 4px;
+  background: #00d2ff;
+  border-radius: 3px;
 }
 
-/* Cards com 5 dígitos */
+/* Cards com os 5 últimos dígitos */
 .hu-chip {
-  background: #1a1a24;
-  border: 1px solid #ff1744;
+  background: rgba(28, 28, 43, 0.9);
+  border: 1px solid #ffd700;
   color: #ffd700;
   font-family: monospace;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: bold;
-  padding: 4px 12px;
+  padding: 4px 10px;
   border-radius: 6px;
-  flex-shrink: 0; /* Impede os cards de encolherem */
-  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+  flex-shrink: 0;
 }
 
 #canvas-processamento {
